@@ -320,6 +320,7 @@
 <div class="login-overlay" id="loginOverlay">
   <div class="login-box">
     <h2>⛳ Tee Time <span>Admin</span></h2>
+    <p style="font-size:0.72rem;color:var(--pale-green);opacity:0.7;text-align:center;margin-top:-8px">Admin sign-in required to add new players</p>
     <div class="login-field">
       <label>Username</label>
       <input type="text" id="loginUser" autocomplete="username" />
@@ -330,6 +331,7 @@
     </div>
     <div class="login-error" id="loginError"></div>
     <button class="login-btn" onclick="doLogin()">Sign In</button>
+    <button style="background:none;border:none;color:var(--light-green);opacity:0.6;cursor:pointer;font-family:'Courier Prime',monospace;font-size:0.75rem;padding:4px;text-align:center" onclick="hideLoginModal();if(_adminResolve){_adminResolve(false);_adminResolve=null;}">Cancel</button>
   </div>
 </div>
 
@@ -566,9 +568,15 @@ async function apiFetch(method, path, body) {
   if (token) opts.headers['x-auth-token'] = token;
   if (body !== undefined) opts.body = JSON.stringify(body);
   const r = await fetch(API + path, opts);
-  if (r.status === 401) { showLogin(); throw new Error('Unauthorized'); }
   if (!r.ok) throw new Error(`${method} ${path} ${r.status}`);
   return r.status === 204 ? null : r.json();
+}
+
+// Resolves true after admin signs in, false if cancelled
+let _adminResolve = null;
+function requireAdmin() {
+  if (getToken()) return Promise.resolve(true);
+  return new Promise(resolve => { _adminResolve = resolve; showLoginModal(); });
 }
 
 async function doLogin() {
@@ -585,27 +593,30 @@ async function doLogin() {
     if (!r.ok) { errEl.textContent = 'Invalid username or password.'; return; }
     const { token } = await r.json();
     localStorage.setItem('authToken', token);
-    hideLogin();
-    init();
+    hideLoginModal();
+    if (_adminResolve) { _adminResolve(true); _adminResolve = null; }
   } catch(e) { errEl.textContent = 'Could not reach server.'; }
 }
 
 async function doLogout() {
-  try { await apiFetch('POST', '/logout'); } catch(e) {}
+  try {
+    const opts = { method:'POST', headers:{'Content-Type':'application/json','x-auth-token':getToken()||''} };
+    await fetch(API + '/logout', opts);
+  } catch(e) {}
   localStorage.removeItem('authToken');
-  showLogin();
+  document.getElementById('adminBar').style.display = 'none';
 }
 
-function showLogin() {
+function showLoginModal() {
   document.getElementById('loginOverlay').style.display = 'flex';
-  document.getElementById('adminBar').style.display = 'none';
   document.getElementById('loginPass').value = '';
   document.getElementById('loginError').textContent = '';
+  setTimeout(() => document.getElementById('loginUser').focus(), 50);
 }
 
-function hideLogin() {
+function hideLoginModal() {
   document.getElementById('loginOverlay').style.display = 'none';
-  document.getElementById('adminBar').style.display = 'flex';
+  if (getToken()) document.getElementById('adminBar').style.display = 'flex';
 }
 
 // ── Time helpers ──────────────────────────────────────────
@@ -1029,11 +1040,13 @@ async function addPlayer(day, gid, nameOverride) {
   const playerObj = { name, transport:'walk', handicap: rosterEntry?(rosterEntry.handicap||''):'', selectedTee:null, apiId: rosterEntry?rosterEntry.apiId:null };
 
   if (!rosterEntry) {
+    const ok = await requireAdmin();
+    if (!ok) return;
     try {
       const result = await apiFetch('POST', '/players', { name });
       playerObj.apiId = result.id;
       playerRoster.push({ apiId:result.id, name, handicap:'' });
-    } catch(e) { console.error('create player:', e); }
+    } catch(e) { console.error('create player:', e); return; }
   }
 
   if (!g.players) g.players=[];
@@ -1455,6 +1468,10 @@ async function qaSave() {
     const entry=playerRoster.find(r=>r.name===name);
     players.push({name,transport:'walk',handicap:entry?(entry.handicap||''):'',selectedTee:null,apiId:entry?entry.apiId:null});
   }
+  if (_qaNew.length > 0) {
+    const ok = await requireAdmin();
+    if (!ok) return;
+  }
   for (const name of _qaNew) {
     let apiId=null;
     try{const r=await apiFetch('POST','/players',{name});apiId=r.id;playerRoster.push({apiId,name,handicap:''});}
@@ -1617,8 +1634,9 @@ async function init() {
   setInterval(cleanupExpiredPlayers, 60000);
 }
 
-// Start: show login or load app
-if (getToken()) { hideLogin(); init(); } else { showLogin(); }
+// Start: load app immediately; show admin bar if already signed in
+if (getToken()) document.getElementById('adminBar').style.display = 'flex';
+init();
 
 // Allow Enter key on login form
 document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });

@@ -59,13 +59,6 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// ─── Protected routes ────────────────────────────────────────────────────────
-app.use('/api', (req, res, next) => {
-  if (req.method === 'GET' && req.path === '/health') return next();
-  if (req.path === '/login' || req.path === '/logout') return next();
-  requireAuth(req, res, next);
-});
-
 // ─── Players ─────────────────────────────────────────────────────────────────
 
 app.get('/api/players', async (req, res) => {
@@ -77,7 +70,7 @@ app.get('/api/players', async (req, res) => {
   }
 });
 
-app.post('/api/players', async (req, res) => {
+app.post('/api/players', requireAuth, async (req, res) => {
   const { name, email, phone, handicap } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
   try {
