@@ -296,9 +296,47 @@
     .day-header { padding: 8px 14px; gap: 5px; }
     .tee-group-body { padding: 8px 12px; gap: 8px; }
   }
+  /* Admin bar */
+  .admin-bar { display:flex; align-items:center; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.35); border-bottom:1px solid rgba(82,183,136,0.2); padding:6px 16px; font-size:0.72rem; letter-spacing:0.08em; }
+  .admin-bar-user { color:var(--pale-green); opacity:0.8; }
+  .admin-bar-logout { background:none; border:1px solid rgba(192,57,43,0.4); border-radius:3px; color:#e07070; cursor:pointer; font-family:'Courier Prime',monospace; font-size:0.72rem; letter-spacing:0.06em; padding:3px 10px; transition:background 0.15s; }
+  .admin-bar-logout:hover { background:rgba(192,57,43,0.2); }
+  /* Login overlay */
+  .login-overlay { position:fixed; inset:0; background:var(--fairway); display:flex; align-items:center; justify-content:center; z-index:9999; }
+  .login-box { background:rgba(13,31,23,0.95); border:1px solid rgba(82,183,136,0.3); border-radius:10px; padding:36px 32px; width:min(360px,90vw); display:flex; flex-direction:column; gap:18px; }
+  .login-box h2 { font-family:'Playfair Display',serif; font-size:1.4rem; color:var(--white); text-align:center; }
+  .login-box h2 span { color:var(--sand); }
+  .login-field { display:flex; flex-direction:column; gap:6px; }
+  .login-field label { font-size:0.68rem; letter-spacing:0.12em; text-transform:uppercase; color:var(--light-green); opacity:0.8; }
+  .login-field input { background:rgba(255,255,255,0.06); border:1px solid rgba(82,183,136,0.3); border-radius:5px; color:var(--cream); font-family:'Courier Prime',monospace; font-size:0.9rem; padding:9px 12px; outline:none; transition:border-color 0.2s; }
+  .login-field input:focus { border-color:var(--light-green); }
+  .login-btn { background:var(--green); border:none; border-radius:5px; color:var(--white); cursor:pointer; font-family:'Courier Prime',monospace; font-size:0.9rem; font-weight:700; letter-spacing:0.08em; padding:11px; transition:background 0.2s; }
+  .login-btn:hover { background:#3d8b68; }
+  .login-error { color:#e07070; font-size:0.75rem; text-align:center; min-height:1em; }
 </style>
 </head>
 <body>
+
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <h2>⛳ Tee Time <span>Admin</span></h2>
+    <div class="login-field">
+      <label>Username</label>
+      <input type="text" id="loginUser" autocomplete="username" />
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <input type="password" id="loginPass" autocomplete="current-password" />
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <button class="login-btn" onclick="doLogin()">Sign In</button>
+  </div>
+</div>
+
+<div class="admin-bar" id="adminBar" style="display:none">
+  <span class="admin-bar-user">admin</span>
+  <button class="admin-bar-logout" onclick="doLogout()">Sign Out</button>
+</div>
 
 <div class="header">
   <span class="header-flag">⛳</span>
@@ -520,12 +558,54 @@ let _uidN = 0;
 function uid() { return 'u' + Date.now() + '_' + (++_uidN); }
 
 // ── API ───────────────────────────────────────────────────
+function getToken() { return localStorage.getItem('authToken'); }
+
 async function apiFetch(method, path, body) {
   const opts = { method, headers: {'Content-Type':'application/json'} };
+  const token = getToken();
+  if (token) opts.headers['x-auth-token'] = token;
   if (body !== undefined) opts.body = JSON.stringify(body);
   const r = await fetch(API + path, opts);
+  if (r.status === 401) { showLogin(); throw new Error('Unauthorized'); }
   if (!r.ok) throw new Error(`${method} ${path} ${r.status}`);
   return r.status === 204 ? null : r.json();
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  try {
+    const r = await fetch(API + '/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password }),
+    });
+    if (!r.ok) { errEl.textContent = 'Invalid username or password.'; return; }
+    const { token } = await r.json();
+    localStorage.setItem('authToken', token);
+    hideLogin();
+    init();
+  } catch(e) { errEl.textContent = 'Could not reach server.'; }
+}
+
+async function doLogout() {
+  try { await apiFetch('POST', '/logout'); } catch(e) {}
+  localStorage.removeItem('authToken');
+  showLogin();
+}
+
+function showLogin() {
+  document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('adminBar').style.display = 'none';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginError').textContent = '';
+}
+
+function hideLogin() {
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('adminBar').style.display = 'flex';
 }
 
 // ── Time helpers ──────────────────────────────────────────
@@ -1537,5 +1617,10 @@ async function init() {
   setInterval(cleanupExpiredPlayers, 60000);
 }
 
-init();
+// Start: show login or load app
+if (getToken()) { hideLogin(); init(); } else { showLogin(); }
+
+// Allow Enter key on login form
+document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('loginUser').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
 </script>

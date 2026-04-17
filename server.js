@@ -2,6 +2,7 @@
 
 const express = require('express');
 const cors    = require('cors');
+const crypto  = require('crypto');
 const { Pool } = require('pg');
 
 const app = express();
@@ -18,6 +19,35 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+const ADMIN_USER = 'admin';
+const ADMIN_HASH = '192552f284a3ac57b509b82ec5759158e368dffbf95938ef0d1eaf76969d5120'; // SHA256 of password
+const sessions   = new Set(); // active tokens
+
+function requireAuth(req, res, next) {
+  const token = req.headers['x-auth-token'];
+  if (token && sessions.has(token)) return next();
+  res.status(401).json({ error: 'Unauthorized' });
+}
+
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+  const hash = crypto.createHash('sha256').update(password || '').digest('hex');
+  if (username === ADMIN_USER && hash === ADMIN_HASH) {
+    const token = crypto.randomBytes(32).toString('hex');
+    sessions.add(token);
+    return res.json({ token });
+  }
+  res.status(401).json({ error: 'Invalid credentials' });
+});
+
+app.post('/api/logout', (req, res) => {
+  const token = req.headers['x-auth-token'];
+  if (token) sessions.delete(token);
+  res.status(204).send();
+});
+
 // ─── Health ──────────────────────────────────────────────────────────────────
 
 app.get('/api/health', async (req, res) => {
@@ -27,6 +57,13 @@ app.get('/api/health', async (req, res) => {
   } catch (err) {
     res.status(503).json({ status: 'error', message: err.message });
   }
+});
+
+// ─── Protected routes ────────────────────────────────────────────────────────
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET' && req.path === '/health') return next();
+  if (req.path === '/login' || req.path === '/logout') return next();
+  requireAuth(req, res, next);
 });
 
 // ─── Players ─────────────────────────────────────────────────────────────────
