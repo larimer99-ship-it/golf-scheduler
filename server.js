@@ -108,6 +108,25 @@ app.post('/api/courses', async (req, res) => {
   }
 });
 
+app.put('/api/courses/:id', async (req, res) => {
+  const { name, address, phone, holes } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE courses SET
+         name    = COALESCE($1, name),
+         address = COALESCE($2, address),
+         phone   = COALESCE($3, phone),
+         holes   = COALESCE($4, holes)
+       WHERE id = $5 RETURNING *`,
+      [name || null, address || null, phone || null, holes || null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Course not found' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Tees ─────────────────────────────────────────────────────────────────────
 
 app.get('/api/tees', async (req, res) => {
@@ -124,7 +143,7 @@ app.get('/api/tees', async (req, res) => {
 
 app.post('/api/tees', async (req, res) => {
   const { course_id, name, color, par, yardage, rating, slope } = req.body;
-  if (!course_id || !name) return res.status(400).json({ error: 'course_id and name are required' });
+  if (!course_id) return res.status(400).json({ error: 'course_id is required' });
   try {
     const { rows } = await pool.query(
       `INSERT INTO tees (course_id, name, color, par, yardage, rating, slope)
@@ -132,6 +151,27 @@ app.post('/api/tees', async (req, res) => {
       [course_id, name, color || null, par || null, yardage || null, rating || null, slope || null]
     );
     res.status(201).json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/tees/:id', async (req, res) => {
+  const { name, color, par, yardage, rating, slope } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tees SET
+         name    = COALESCE($1, name),
+         color   = COALESCE($2, color),
+         par     = COALESCE($3, par),
+         yardage = COALESCE($4, yardage),
+         rating  = COALESCE($5, rating),
+         slope   = COALESCE($6, slope)
+       WHERE id = $7 RETURNING *`,
+      [name ?? null, color || null, par ?? null, yardage ?? null, rating ?? null, slope ?? null, req.params.id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Tee not found' });
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

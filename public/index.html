@@ -1235,17 +1235,20 @@ function updateTee(id, field, value) {
 }
 
 async function persistTeeUpdate(t) {
-  if (!t.apiId) return;
   const courseId=await ensureCourse(); if(!courseId) return;
+  const payload={
+    course_id:courseId, name:t.name||'', color:t.color||'#ffffff',
+    par:t.par!=null?t.par:72,
+    rating:t.rating!==''?parseFloat(t.rating):null,
+    slope: t.slope!==''?parseInt(t.slope):null,
+  };
   try {
-    await apiFetch('DELETE',`/tees/${t.apiId}`);
-    const r=await apiFetch('POST','/tees',{
-      course_id:courseId, name:t.name||'', color:t.color||'#ffffff',
-      par:t.par!=null?t.par:72,
-      rating:t.rating!==''?parseFloat(t.rating):null,
-      slope: t.slope!==''?parseInt(t.slope):null,
-    });
-    t.apiId=r.id; // keep t.id as stable uid — DOM onblur handlers reference it
+    if (t.apiId) {
+      await apiFetch('PUT',`/tees/${t.apiId}`,payload);
+    } else {
+      const r=await apiFetch('POST','/tees',payload);
+      t.apiId=r.id; // keep t.id as stable uid — DOM onblur handlers reference it
+    }
   } catch(e){console.error('persistTeeUpdate:',e);}
 }
 
