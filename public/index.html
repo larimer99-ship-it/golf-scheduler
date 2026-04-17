@@ -1214,7 +1214,7 @@ async function addTee() {
   teeState.tees.push(tmp); renderTeeRows();
   try {
     const r=await apiFetch('POST','/tees',{course_id:courseId,name:'',color,par:72});
-    tmp.apiId=r.id; tmp.id=String(r.id);
+    tmp.apiId=r.id; // keep tmp.id as stable uid — DOM onblur handlers reference it
   } catch(e){console.error('addTee:',e);}
 }
 
@@ -1245,7 +1245,7 @@ async function persistTeeUpdate(t) {
       rating:t.rating!==''?parseFloat(t.rating):null,
       slope: t.slope!==''?parseInt(t.slope):null,
     });
-    t.apiId=r.id; t.id=String(r.id);
+    t.apiId=r.id; // keep t.id as stable uid — DOM onblur handlers reference it
   } catch(e){console.error('persistTeeUpdate:',e);}
 }
 
