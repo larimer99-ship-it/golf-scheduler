@@ -153,7 +153,7 @@
   .player-tee-btn.selected { border-color:#f0c520; background:rgba(240,197,32,0.14); color:#f0c520; box-shadow:0 0 7px rgba(240,197,32,0.3); }
   .player-tee-btn:hover:not(.selected) { border-color:rgba(82,183,136,0.5); background:rgba(82,183,136,0.1); }
   .player-hcp-result { margin-top:2px; padding:6px 10px; background:rgba(240,197,32,0.1); border:1px solid rgba(240,197,32,0.3); border-radius:5px; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
-  .player-hcp-result-num { font-family:'Playfair Display',serif; font-size:clamp(1.1rem,3vw,1.4rem); font-weight:900; color:#f0c520; line-height:1; }
+  .player-hcp-result-num { font-family:'Playfair Display',serif; font-size:clamp(1.1rem,3vw,1.4rem); font-weight:900; color:#ffffff; line-height:1; }
   .player-hcp-result-label { font-size:clamp(0.58rem,1.3vw,0.65rem); letter-spacing:0.1em; text-transform:uppercase; color:var(--pale-green); opacity:0.8; }
   .player-hcp-result-tee { font-size:clamp(0.58rem,1.3vw,0.65rem); color:var(--light-green); opacity:0.65; margin-left:auto; }
   .tee-no-data { font-size:clamp(0.6rem,1.3vw,0.68rem); color:var(--light-green); opacity:0.55; letter-spacing:0.06em; font-style:italic; }
@@ -880,7 +880,7 @@ function renderGroupChips(day, g) {
     let hcpHtml = '';
     if (hcp!==null) {
       hcpHtml = `<div class="player-hcp-result" style="background:color-mix(in srgb,${tc} 12%,transparent);border-color:color-mix(in srgb,${tc} 50%,transparent)">
-        <span class="player-hcp-result-num" style="color:${tc}">${hcp}</span>
+        <span class="player-hcp-result-num">${hcp}</span>
         <span class="player-hcp-result-label">Playing Handicap</span>
         <span class="player-hcp-result-tee">${tee.name} · ${tee.rating}/${tee.slope}</span>
       </div>`;
