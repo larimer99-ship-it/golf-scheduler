@@ -563,31 +563,18 @@ function newGroup() {
   return { id: uid(), apiId: null, time: '', holes: '18 Holes', notes: '', players: [] };
 }
 
-// ── UI prefs (transport/selectedTee stay in localStorage) ─
+// ── UI prefs (tee panel open state only — tee selection and transport saved to DB) ─
 function loadPrefs() {
   try { return JSON.parse(localStorage.getItem('golfPrefsV1') || '{}'); } catch(e) { return {}; }
 }
 function savePrefs() {
   try {
-    const p = {};
-    DAYS.forEach(day => state[day].groups.forEach(g => {
-      if (!g.apiId) return;
-      g.players.forEach(pl => {
-        p[`${g.apiId}:${pl.name}`] = { transport: pl.transport||'walk', selectedTee: pl.selectedTee||null };
-      });
-    }));
-    p._teeOpen = teeState.open;
+    const p = { _teeOpen: teeState.open };
     localStorage.setItem('golfPrefsV1', JSON.stringify(p));
   } catch(e) {}
 }
 function applyPrefs() {
   const p = loadPrefs();
-  DAYS.forEach(day => state[day].groups.forEach(g => {
-    g.players.forEach(pl => {
-      const k = `${g.apiId}:${pl.name}`;
-      if (p[k]) { pl.transport = p[k].transport||'walk'; pl.selectedTee = p[k].selectedTee||null; }
-    });
-  }));
   if (p._teeOpen) teeState.open = p._teeOpen;
 }
 // saveState is called by legacy code paths — just persist prefs now
@@ -647,11 +634,11 @@ async function loadAll() {
         time:   isoToTime(tt.tee_time),
         holes, notes,
         players: (tt.players||[]).map(p => ({
-          name:       p.name,
-          apiId:      p.id,
-          transport:  'walk',
-          handicap:   p.handicap != null ? String(p.handicap) : '',
-          selectedTee: null,
+          name:        p.name,
+          apiId:       p.id,
+          transport:   p.transport || 'walk',
+          handicap:    p.handicap != null ? String(p.handicap) : '',
+          selectedTee: p.tee_id ? String(p.tee_id) : null,
         })),
       });
     });
@@ -683,9 +670,11 @@ async function syncFromAPI() {
         id: 'api_'+tt.id, apiId: tt.id,
         time: isoToTime(tt.tee_time), holes, notes,
         players: (tt.players||[]).map(p => ({
-          name: p.name, apiId: p.id, transport:'walk',
-          handicap: p.handicap != null ? String(p.handicap) : '',
-          selectedTee: null,
+          name:        p.name,
+          apiId:       p.id,
+          transport:   p.transport || 'walk',
+          handicap:    p.handicap != null ? String(p.handicap) : '',
+          selectedTee: p.tee_id ? String(p.tee_id) : null,
         })),
       });
     });
@@ -1004,8 +993,13 @@ function refreshAddBtn(day) {
 
 function setTransport(day, gid, idx, mode) {
   const g=state[day].groups.find(x=>x.id===gid); if(!g) return;
-  g.players[idx].transport=mode;
+  const pl=g.players[idx];
+  pl.transport=mode;
   renderGroupChips(day,g); savePrefs();
+  if (g.apiId && pl.apiId) {
+    apiFetch('PUT',`/tee-times/${g.apiId}/players/${pl.apiId}`,{transport:mode})
+      .catch(e=>console.error('setTransport save:',e));
+  }
 }
 
 async function setHandicap(day, gid, idx, value) {
@@ -1022,8 +1016,14 @@ async function setHandicap(day, gid, idx, value) {
 
 function setTee(day, gid, idx, teeId) {
   const g=state[day].groups.find(x=>x.id===gid); if(!g) return;
-  g.players[idx].selectedTee = g.players[idx].selectedTee===teeId ? null : teeId;
+  const pl=g.players[idx];
+  pl.selectedTee = pl.selectedTee===teeId ? null : teeId;
   renderGroupChips(day,g); savePrefs();
+  if (g.apiId && pl.apiId) {
+    const tee=pl.selectedTee ? teeState.tees.find(t=>String(t.apiId||t.id)===pl.selectedTee) : null;
+    apiFetch('PUT',`/tee-times/${g.apiId}/players/${pl.apiId}`,{tee_id: tee?tee.apiId:null})
+      .catch(e=>console.error('setTee save:',e));
+  }
 }
 
 async function renamePlayerParts(day, gid, idx, first, last) {

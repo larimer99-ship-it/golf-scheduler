@@ -199,7 +199,10 @@ app.get('/api/tee-times', async (req, res) => {
         t.color AS tee_color,
         COALESCE(
           json_agg(
-            json_build_object('id', p.id, 'name', p.name, 'handicap', p.handicap)
+            json_build_object(
+              'id', p.id, 'name', p.name, 'handicap', p.handicap,
+              'tee_id', ttp.tee_id, 'transport', ttp.transport
+            )
           ) FILTER (WHERE p.id IS NOT NULL),
           '[]'
         ) AS players
@@ -302,6 +305,23 @@ app.delete('/api/tee-times/:id/players', async (req, res) => {
     );
     if (!rowCount) return res.status(404).json({ error: 'Player not found in this tee time' });
     res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/tee-times/:id/players/:playerId', async (req, res) => {
+  const { tee_id, transport } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE tee_time_players SET
+         tee_id    = COALESCE($1, tee_id),
+         transport = COALESCE($2, transport)
+       WHERE tee_time_id = $3 AND player_id = $4 RETURNING *`,
+      [tee_id ?? null, transport || null, req.params.id, req.params.playerId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Player not in tee time' });
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
