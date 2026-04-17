@@ -876,7 +876,7 @@ function renderGroupChips(day, g) {
   (g.players||[]).forEach((p, i) => {
     const chip = document.createElement('div');
     chip.className = 'player-chip';
-    const tee = p.selectedTee ? teeState.tees.find(t => t.id===p.selectedTee) : null;
+    const tee = p.selectedTee ? teeState.tees.find(t => String(t.apiId||t.id)===p.selectedTee) : null;
     const hcp = calcHcp(p.handicap, tee);
     const tc  = tee ? tee.color : null;
     if (tc) chip.style.cssText = `border-color:${tc}55;box-shadow:inset 3px 0 0 ${tc};background:color-mix(in srgb,${tc} 8%,rgba(45,106,79,0.4))`;
@@ -884,8 +884,8 @@ function renderGroupChips(day, g) {
     const teeBtns = teeState.tees.length===0
       ? '<span class="tee-no-data">No tees configured above ↑</span>'
       : teeState.tees.map(t=>`
-          <button class="player-tee-btn${t.id===p.selectedTee?' selected':''}"
-            onclick="setTee('${day}','${g.id}',${i},'${t.id}')">
+          <button class="player-tee-btn${String(t.apiId||t.id)===p.selectedTee?' selected':''}"
+            onclick="setTee('${day}','${g.id}',${i},'${String(t.apiId||t.id)}')">
             <span class="tee-dot" style="background:${t.color}"></span>${t.name||'—'}
           </button>`).join('');
     let hcpHtml = '';
@@ -1165,7 +1165,7 @@ function showAllPlayers() {
       timeEl.textContent=`⛳ ${g.time?formatTime(g.time):'No time set'} · ${g.holes}`;
       section.appendChild(timeEl);
       g.players.forEach(p=>{
-        const tee=p.selectedTee?teeState.tees.find(t=>t.id===p.selectedTee):null;
+        const tee=p.selectedTee?teeState.tees.find(t=>String(t.apiId||t.id)===p.selectedTee):null;
         const hcp=calcHcp(p.handicap,tee);
         const row=document.createElement('div'); row.className='modal-player-row';
         row.innerHTML=`
@@ -1409,7 +1409,7 @@ function makeTeams(day,teamSize,randomMode){
   const container=document.getElementById('teams-'+day);
   const allPlayers=[];
   (state[day].groups||[]).forEach(g=>(g.players||[]).forEach(p=>{
-    const tee=p.selectedTee?teeState.tees.find(t=>t.id===p.selectedTee):null;
+    const tee=p.selectedTee?teeState.tees.find(t=>String(t.apiId||t.id)===p.selectedTee):null;
     const hcp=calcHcp(p.handicap,tee);
     allPlayers.push({name:p.name,handicap:p.handicap,playingHcp:hcp,teeColor:tee?tee.color:null,
       sortHcp:hcp!==null?hcp:(p.handicap!==''&&p.handicap!=null?parseFloat(p.handicap):999)});
