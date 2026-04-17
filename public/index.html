@@ -758,6 +758,7 @@ async function addGroup(day) {
 }
 
 async function removeGroup(day, gid) {
+  if (!confirm('Remove this tee time group?')) return;
   const g = state[day].groups.find(x => x.id === gid);
   const apiId = g && g.apiId;
   state[day].groups = state[day].groups.filter(x => x.id !== gid);
@@ -972,6 +973,7 @@ async function addPlayer(day, gid, nameOverride) {
 async function removePlayer(day, gid, idx) {
   const g = state[day].groups.find(x=>x.id===gid);
   if (!g) return;
+  if (!confirm(`Remove ${g.players[idx]?.name || 'this player'} from the group?`)) return;
   const player     = g.players[idx];
   const playerApiId = player&&player.apiId;
   g.players.splice(idx,1);
@@ -1220,6 +1222,7 @@ async function addTee() {
 
 async function removeTee(id) {
   const tee=teeState.tees.find(t=>t.id===id);
+  if (!confirm(`Remove the ${tee?.name||'this'} tee?`)) return;
   const apiId=tee&&tee.apiId;
   teeState.tees=teeState.tees.filter(t=>t.id!==id);
   renderTeeRows(); refreshAllChips();
