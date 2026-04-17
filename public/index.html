@@ -297,10 +297,7 @@
     .tee-group-body { padding: 8px 12px; gap: 8px; }
   }
   /* Admin bar */
-  .admin-bar { display:flex; align-items:center; justify-content:flex-end; gap:10px; background:rgba(0,0,0,0.35); border-bottom:1px solid rgba(82,183,136,0.2); padding:6px 16px; font-size:0.72rem; letter-spacing:0.08em; }
-  .admin-bar-user { color:var(--pale-green); opacity:0.8; }
-  .admin-bar-logout { background:none; border:1px solid rgba(192,57,43,0.4); border-radius:3px; color:#e07070; cursor:pointer; font-family:'Courier Prime',monospace; font-size:0.72rem; letter-spacing:0.06em; padding:3px 10px; transition:background 0.15s; }
-  .admin-bar-logout:hover { background:rgba(192,57,43,0.2); }
+  .header-flag { cursor:pointer; }
   /* Login overlay */
   .login-overlay { position:fixed; inset:0; background:var(--fairway); display:flex; align-items:center; justify-content:center; z-index:9999; }
   .login-box { background:rgba(13,31,23,0.95); border:1px solid rgba(82,183,136,0.3); border-radius:10px; padding:36px 32px; width:min(360px,90vw); display:flex; flex-direction:column; gap:18px; }
@@ -335,13 +332,8 @@
   </div>
 </div>
 
-<div class="admin-bar" id="adminBar" style="display:none">
-  <span class="admin-bar-user">admin</span>
-  <button class="admin-bar-logout" onclick="doLogout()">Sign Out</button>
-</div>
-
 <div class="header">
-  <span class="header-flag">⛳</span>
+  <span class="header-flag" id="flagIcon" onclick="onFlagClick()" title="">⛳</span>
   <h1>Tee Time <span>Scheduler</span></h1>
   <p>Set your rounds for the week</p>
 </div>
@@ -598,13 +590,17 @@ async function doLogin() {
   } catch(e) { errEl.textContent = 'Could not reach server.'; }
 }
 
+function onFlagClick() {
+  if (getToken()) { if (confirm('Sign out as admin?')) doLogout(); }
+  else showLoginModal();
+}
+
 async function doLogout() {
   try {
     const opts = { method:'POST', headers:{'Content-Type':'application/json','x-auth-token':getToken()||''} };
     await fetch(API + '/logout', opts);
   } catch(e) {}
   localStorage.removeItem('authToken');
-  document.getElementById('adminBar').style.display = 'none';
 }
 
 function showLoginModal() {
@@ -616,7 +612,6 @@ function showLoginModal() {
 
 function hideLoginModal() {
   document.getElementById('loginOverlay').style.display = 'none';
-  if (getToken()) document.getElementById('adminBar').style.display = 'flex';
 }
 
 // ── Time helpers ──────────────────────────────────────────
@@ -1634,8 +1629,6 @@ async function init() {
   setInterval(cleanupExpiredPlayers, 60000);
 }
 
-// Start: load app immediately; show admin bar if already signed in
-if (getToken()) document.getElementById('adminBar').style.display = 'flex';
 init();
 
 // Allow Enter key on login form
