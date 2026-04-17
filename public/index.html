@@ -1,0 +1,1535 @@
+<!DOCTYPE html>
+<!-- saved from url=(0058)file:///Users/robertlarimer/Downloads/golf-tee-time_1.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Golf Tee Time Scheduler</title>
+<link href="./golf-tee-scheduler_files/css2" rel="stylesheet">
+<style>
+  :root {
+    --fairway: #1a3a2a; --green: #2d6a4f; --light-green: #52b788;
+    --pale-green: #b7e4c7; --cream: #f5f0e8; --sand: #d4a853;
+    --dark: #0d1f17; --white: #fafaf7; --flag-red: #c0392b;
+    --pad: clamp(10px, 3vw, 20px);
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: clamp(13px, 2vw, 16px); }
+  body {
+    background-color: var(--fairway); font-family: 'Courier Prime', monospace;
+    color: var(--cream); min-height: 100dvh; width: 100%; overflow-x: hidden;
+    background-image: radial-gradient(ellipse at 20% 80%, rgba(45,106,79,0.4) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(82,183,136,0.15) 0%, transparent 50%);
+  }
+
+  /* Header */
+  .header { text-align: center; padding: clamp(20px,5vw,48px) var(--pad) clamp(16px,3vw,32px); }
+  .header::after { content:''; display:block; width:60px; height:3px; background:var(--sand); margin:14px auto 0; }
+  .header-flag { font-size: clamp(24px,5vw,40px); display:block; margin-bottom:8px; animation: flag-wave 2s ease-in-out infinite alternate; }
+  @keyframes flag-wave { from{transform:rotate(-5deg)} to{transform:rotate(5deg)} }
+  .header h1 { font-family:'Playfair Display',serif; font-size:clamp(1.5rem,5vw,3.2rem); font-weight:900; letter-spacing:-0.02em; color:var(--white); line-height:1.1; }
+  .header h1 span { color:var(--sand); }
+  .header p { margin-top:8px; font-size:clamp(0.6rem,1.5vw,0.85rem); letter-spacing:0.18em; text-transform:uppercase; color:var(--light-green); opacity:0.85; }
+
+  /* Course */
+  .course-row { max-width:min(960px,100%); margin:0 auto clamp(12px,3vw,24px); padding:0 var(--pad); }
+  .course-input-wrap { display:flex; align-items:center; gap:10px; }
+  .course-icon { font-size:clamp(1rem,3vw,1.4rem); flex-shrink:0; }
+  .course-input-wrap input { font-family:'Playfair Display',serif; font-size:clamp(0.9rem,2.5vw,1.1rem); font-style:italic; background:transparent; border:none; border-bottom:1px solid rgba(82,183,136,0.3); border-radius:0; color:var(--cream); padding:6px 0; width:100%; outline:none; }
+  .course-input-wrap input:focus { border-color:var(--sand); }
+  .course-input-wrap input::placeholder { color:rgba(245,240,232,0.3); font-style:italic; }
+
+  /* Tee Setup Panel */
+  .tee-setup-panel { max-width:min(960px,100%); margin:0 auto clamp(12px,3vw,20px); padding:0 var(--pad); }
+  .tee-setup-toggle { display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none; padding:clamp(10px,2vw,14px) clamp(12px,2.5vw,18px); background:rgba(255,255,255,0.04); border:1px solid rgba(82,183,136,0.2); border-radius:4px; transition:border-color 0.2s; }
+  .tee-setup-toggle:hover { border-color:rgba(82,183,136,0.4); }
+  .tee-setup-toggle-label { font-family:'Playfair Display',serif; font-size:clamp(0.9rem,2.2vw,1.1rem); font-weight:700; color:var(--white); flex:1; }
+  .tee-setup-toggle-sub { font-size:clamp(0.62rem,1.4vw,0.72rem); color:var(--light-green); opacity:0.7; letter-spacing:0.1em; text-transform:uppercase; }
+  .tee-setup-arrow { font-size:1rem; color:var(--light-green); transition:transform 0.3s; flex-shrink:0; }
+  .tee-setup-panel.open .tee-setup-arrow { transform:rotate(180deg); }
+  .tee-setup-body { display:none; padding:clamp(12px,2.5vw,18px); border:1px solid rgba(82,183,136,0.2); border-top:none; border-radius:0 0 4px 4px; background:rgba(255,255,255,0.02); animation:slide-down 0.22s ease; }
+  .tee-setup-panel.open .tee-setup-body { display:block; }
+  @keyframes slide-down { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+  .tee-rows { display:flex; flex-direction:column; gap:10px; }
+  .tee-row { display:grid; grid-template-columns:34px 1fr 1fr auto; gap:clamp(5px,1.5vw,10px); align-items:start; }
+  @media(max-width:520px){ .tee-row{grid-template-columns:28px 1fr 1fr auto} }
+  .tee-rating-slope { display:flex; flex-direction:column; gap:6px; }
+  .tee-color-swatch { width:28px; height:28px; border-radius:50%; border:2px solid rgba(255,255,255,0.25); position:relative; cursor:pointer; flex-shrink:0; }
+  .tee-color-swatch input[type="color"] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; border:none; padding:0; }
+  .tee-field-label { font-size:clamp(0.58rem,1.2vw,0.65rem); letter-spacing:0.12em; text-transform:uppercase; color:var(--light-green); opacity:0.75; display:block; margin-bottom:2px; }
+  .tee-input { background:rgba(0,0,0,0.3)!important; border:1px solid rgba(82,183,136,0.22)!important; border-radius:3px!important; color:var(--cream)!important; font-family:'Courier Prime',monospace!important; font-size:clamp(0.72rem,1.6vw,0.85rem)!important; padding:clamp(5px,1vw,7px) clamp(6px,1.2vw,10px)!important; width:100%!important; outline:none; transition:border-color 0.2s; }
+  .tee-input:focus { border-color:var(--sand)!important; }
+  .tee-input::placeholder { color:rgba(245,240,232,0.25); }
+  .btn-remove-tee { background:none; border:1px solid rgba(192,57,43,0.35); border-radius:3px; color:#e07070; cursor:pointer; font-size:0.85rem; padding:5px 8px; transition:background 0.15s; flex-shrink:0; }
+  .btn-remove-tee:hover { background:rgba(192,57,43,0.2); }
+  .btn-add-tee { margin-top:12px; background:rgba(45,106,79,0.4); border:1px solid rgba(82,183,136,0.4); border-radius:3px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); letter-spacing:0.08em; padding:7px 14px; transition:background 0.2s; }
+  .btn-add-tee:hover { background:rgba(45,106,79,0.7); }
+  .tee-setup-hint { margin-top:10px; font-size:clamp(0.58rem,1.3vw,0.66rem); color:var(--light-green); opacity:0.6; letter-spacing:0.06em; }
+
+  /* Summary bar */
+  .summary-bar { max-width:min(960px,100%); margin:0 auto; padding:0 var(--pad) clamp(10px,2vw,16px); display:flex; gap:clamp(6px,2vw,20px); }
+  .stat { display:flex; flex-direction:column; align-items:center; gap:2px; padding:clamp(8px,2vw,14px) clamp(8px,2vw,20px); background:rgba(255,255,255,0.04); border:1px solid rgba(82,183,136,0.2); border-radius:4px; flex:1; min-width:0; }
+  .stat-num { font-family:'Playfair Display',serif; font-size:clamp(1.2rem,4vw,2rem); font-weight:900; color:var(--sand); line-height:1; }
+  .stat-label { font-size:clamp(0.55rem,1.2vw,0.68rem); letter-spacing:0.12em; text-transform:uppercase; color:var(--light-green); opacity:0.75; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+
+  /* Week container */
+  .week-container { max-width:min(960px,100%); margin:0 auto; padding:0 var(--pad) clamp(30px,6vw,60px); display:flex; flex-direction:column; gap:clamp(6px,1.5vw,12px); }
+
+  /* Day card */
+  .day-card { background:rgba(255,255,255,0.04); border:1px solid rgba(82,183,136,0.2); border-radius:4px; overflow:hidden; transition:border-color 0.2s; }
+  .day-card:hover { border-color:rgba(82,183,136,0.4); }
+  .day-card.has-tee-time { border-color:rgba(212,168,83,0.5); background:rgba(212,168,83,0.06); }
+  .day-header { display:flex; flex-direction:column; padding:clamp(10px,2.5vw,16px) clamp(10px,2.5vw,20px); cursor:pointer; user-select:none; gap:8px; min-width:0; }
+  .day-header-top { display:flex; align-items:center; gap:clamp(6px,2vw,12px); min-width:0; }
+  .day-name { font-family:'Playfair Display',serif; font-size:clamp(0.95rem,2.5vw,1.3rem); font-weight:700; color:var(--white); flex-shrink:0; }
+  .day-abbr { font-size:0.65rem; letter-spacing:0.15em; text-transform:uppercase; color:var(--light-green); opacity:0.7; display:block; }
+  .day-date { font-size:clamp(0.68rem,1.6vw,0.78rem); color:var(--sand); opacity:0.85; display:block; font-family:'Courier Prime',monospace; font-weight:400; letter-spacing:0.04em; }
+  .players-summary { font-size:clamp(0.65rem,1.5vw,0.78rem); color:var(--pale-green); opacity:0.75; white-space:nowrap; flex-shrink:0; }
+  .toggle-icon { font-size:1rem; color:var(--light-green); transition:transform 0.3s; flex-shrink:0; }
+  .day-card.open .toggle-icon { transform:rotate(180deg); }
+
+  /* Day summary (collapsed) */
+  .day-summary { display:none; flex-direction:column; gap:5px; }
+  .has-tee-time .day-summary { display:flex; }
+  .day-summary-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .day-summary-time { font-family:'Playfair Display',serif; font-size:clamp(0.78rem,2vw,0.95rem); font-weight:700; color:var(--sand); white-space:nowrap; flex-shrink:0; min-width:70px; }
+  .day-summary-players { display:flex; flex-wrap:wrap; gap:4px; flex:1; min-width:0; }
+  .day-summary-player-pill { font-size:clamp(0.58rem,1.3vw,0.68rem); color:var(--pale-green); background:rgba(82,183,136,0.12); border:1px solid rgba(82,183,136,0.2); border-radius:8px; padding:1px 7px; white-space:nowrap; }
+  .day-summary-no-players { font-size:clamp(0.58rem,1.3vw,0.66rem); color:var(--light-green); opacity:0.5; font-style:italic; }
+  .day-summary-total { font-size:clamp(0.6rem,1.4vw,0.7rem); color:var(--pale-green); opacity:0.7; padding-top:3px; border-top:1px solid rgba(82,183,136,0.15); margin-top:2px; letter-spacing:0.06em; }
+
+  /* Day form */
+  .day-form { display:none; padding:0 clamp(10px,2.5vw,20px) clamp(12px,2.5vw,20px); border-top:1px solid rgba(82,183,136,0.15); animation:slide-down 0.22s ease; }
+  .day-card.open .day-form { display:block; }
+
+  /* Tee groups */
+  .tee-groups { display:flex; flex-direction:column; gap:14px; margin-top:14px; }
+  .tee-group { border:1px solid rgba(82,183,136,0.22); border-radius:6px; overflow:hidden; background:rgba(0,0,0,0.12); }
+  .tee-group-header { display:flex; align-items:center; gap:10px; padding:clamp(8px,2vw,12px) clamp(10px,2.5vw,16px); background:rgba(45,106,79,0.25); border-bottom:1px solid rgba(82,183,136,0.15); flex-wrap:wrap; }
+  .tee-group-num { font-family:'Playfair Display',serif; font-size:clamp(0.7rem,1.8vw,0.85rem); font-weight:700; color:var(--sand); letter-spacing:0.08em; flex-shrink:0; }
+  .tee-group-time-display { font-size:clamp(0.78rem,2vw,0.95rem); color:var(--white); font-weight:700; flex:1; min-width:0; }
+  .tee-group-players-count { font-size:clamp(0.62rem,1.4vw,0.72rem); color:var(--pale-green); opacity:0.8; white-space:nowrap; }
+  .btn-remove-group { background:none; border:1px solid rgba(192,57,43,0.35); border-radius:3px; color:#e07070; cursor:pointer; font-size:0.8rem; padding:3px 8px; transition:background 0.15s; flex-shrink:0; font-family:'Courier Prime',monospace; }
+  .btn-remove-group:hover { background:rgba(192,57,43,0.2); }
+  .tee-group-body { padding:clamp(10px,2vw,14px) clamp(10px,2.5vw,16px); display:flex; flex-direction:column; gap:12px; }
+  .tee-group-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr)); gap:10px; }
+  .btn-add-group { flex:1; background:rgba(45,106,79,0.35); border:1px dashed rgba(82,183,136,0.4); border-radius:6px; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); letter-spacing:0.08em; padding:clamp(8px,1.5vw,11px); transition:background 0.2s,border-color 0.2s; text-align:center; }
+  .btn-add-group:hover { background:rgba(45,106,79,0.6); border-color:rgba(82,183,136,0.7); }
+
+  /* Form fields */
+  .form-group { display:flex; flex-direction:column; gap:5px; min-width:0; }
+  label { font-size:clamp(0.6rem,1.4vw,0.7rem); letter-spacing:0.15em; text-transform:uppercase; color:var(--light-green); opacity:0.85; }
+  input, select, textarea { background:rgba(0,0,0,0.3); border:1px solid rgba(82,183,136,0.25); border-radius:3px; color:var(--cream); font-family:'Courier Prime',monospace; font-size:max(16px,0.9rem); padding:clamp(7px,1.5vw,10px) clamp(8px,2vw,12px); outline:none; transition:border-color 0.2s,box-shadow 0.2s; width:100%; }
+  input:focus, select:focus, textarea:focus { border-color:var(--sand); box-shadow:0 0 0 2px rgba(212,168,83,0.15); }
+  select option { background:var(--dark); }
+  textarea { resize:vertical; min-height:56px; font-size:max(16px,0.85rem); }
+
+  /* Players */
+  .players-row { display:flex; flex-direction:column; gap:10px; }
+  .player-chip { display:flex; flex-direction:column; gap:8px; background:rgba(45,106,79,0.4); border:1px solid rgba(82,183,136,0.35); border-radius:8px; padding:clamp(10px,2vw,14px); animation:chip-in 0.2s ease; min-width:0; }
+  @keyframes chip-in { from{transform:scale(0.97);opacity:0} to{transform:scale(1);opacity:1} }
+  .chip-top-row { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:clamp(6px,2vw,10px); min-width:0; }
+  .player-name-stack { display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .player-name { font-size:clamp(0.95rem,2.5vw,1.1rem); font-weight:700; letter-spacing:0.03em; color:var(--pale-green); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:5px; }
+  .player-name-input { background:transparent; border:none; border-bottom:1px solid transparent; border-radius:0; outline:none; width:100%; min-width:0; padding:1px 0; transition:border-color 0.18s,background 0.18s; cursor:text; font-family:'Courier Prime',monospace; }
+  .player-name-input:hover { border-bottom-color:rgba(82,183,136,0.3); }
+  .player-name-input:focus { border-bottom-color:var(--sand); background:rgba(0,0,0,0.15); padding:1px 5px; border-radius:3px; }
+  .player-firstname { font-size:clamp(0.95rem,2.5vw,1.1rem); font-weight:700; letter-spacing:0.03em; }
+  .player-lastname { font-size:clamp(0.75rem,1.8vw,0.85rem); font-weight:400; opacity:0.8; letter-spacing:0.02em; }
+  .transport-toggle { display:flex; background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.1); border-radius:20px; overflow:hidden; flex-shrink:0; }
+  .transport-toggle button { background:none; border:none; color:rgba(245,240,232,0.35); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.62rem,1.5vw,0.72rem); font-weight:700; letter-spacing:0.06em; padding:clamp(4px,1vw,6px) clamp(6px,1.5vw,12px); transition:background 0.18s,color 0.18s; white-space:nowrap; }
+  .transport-toggle button.active-walk, .transport-toggle button.active-ride { background:#f0c520; color:#1a3a2a; box-shadow:0 0 10px rgba(240,197,32,0.55); }
+  .remove-btn { background:rgba(192,57,43,0.15); border:1px solid rgba(192,57,43,0.4); border-radius:4px; color:#e07070; cursor:pointer; font-size:clamp(0.65rem,1.4vw,0.78rem); font-family:'Courier Prime',monospace; padding:clamp(3px,0.8vw,5px) clamp(6px,1.5vw,10px); transition:background 0.15s; flex-shrink:0; white-space:nowrap; }
+  .remove-btn:hover { background:rgba(192,57,43,0.35); border-color:#c0392b; }
+  .player-handicap-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .handicap-label { font-size:clamp(0.58rem,1.3vw,0.66rem); letter-spacing:0.12em; text-transform:uppercase; color:var(--light-green); opacity:0.8; white-space:nowrap; flex-shrink:0; }
+  .handicap-input { background:rgba(0,0,0,0.25)!important; border:1px solid rgba(82,183,136,0.2)!important; border-radius:3px!important; color:var(--cream)!important; font-family:'Courier Prime',monospace!important; font-size:clamp(0.72rem,1.6vw,0.82rem)!important; padding:3px 8px!important; width:clamp(70px,20%,110px)!important; outline:none; }
+  .handicap-input:focus { border-color:var(--sand)!important; }
+  .handicap-input::placeholder { color:rgba(245,240,232,0.3); }
+  .player-tee-row { display:flex; flex-direction:column; gap:5px; }
+  .player-tee-label { font-size:clamp(0.58rem,1.3vw,0.65rem); letter-spacing:0.13em; text-transform:uppercase; color:var(--light-green); opacity:0.8; }
+  .player-tee-btns { display:flex; gap:6px; flex-wrap:wrap; }
+  .player-tee-btn { display:flex; align-items:center; gap:5px; background:rgba(0,0,0,0.25); border:1px solid rgba(82,183,136,0.25); border-radius:16px; color:var(--cream); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.62rem,1.4vw,0.72rem); padding:4px 10px 4px 7px; transition:border-color 0.18s,background 0.18s; white-space:nowrap; }
+  .player-tee-btn .tee-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .player-tee-btn.selected { border-color:#f0c520; background:rgba(240,197,32,0.14); color:#f0c520; box-shadow:0 0 7px rgba(240,197,32,0.3); }
+  .player-tee-btn:hover:not(.selected) { border-color:rgba(82,183,136,0.5); background:rgba(82,183,136,0.1); }
+  .player-hcp-result { margin-top:2px; padding:6px 10px; background:rgba(240,197,32,0.1); border:1px solid rgba(240,197,32,0.3); border-radius:5px; display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .player-hcp-result-num { font-family:'Playfair Display',serif; font-size:clamp(1.1rem,3vw,1.4rem); font-weight:900; color:#f0c520; line-height:1; }
+  .player-hcp-result-label { font-size:clamp(0.58rem,1.3vw,0.65rem); letter-spacing:0.1em; text-transform:uppercase; color:var(--pale-green); opacity:0.8; }
+  .player-hcp-result-tee { font-size:clamp(0.58rem,1.3vw,0.65rem); color:var(--light-green); opacity:0.65; margin-left:auto; }
+  .tee-no-data { font-size:clamp(0.6rem,1.3vw,0.68rem); color:var(--light-green); opacity:0.55; letter-spacing:0.06em; font-style:italic; }
+
+  /* Add player */
+  .add-player-row { display:flex; flex-direction:column; gap:6px; margin-top:6px; }
+  .add-player-name-row { display:flex; gap:6px; flex-wrap:wrap; }
+  .add-player-name-row input { flex:1; min-width:100px; }
+  .add-player-input-row { display:flex; gap:8px; }
+  .add-player-input-row input { flex:1; min-width:0; }
+  .btn-add-player { background:rgba(45,106,79,0.5); border:1px solid var(--light-green); border-radius:3px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.8rem,1.8vw,1rem); padding:clamp(6px,1.2vw,8px) clamp(10px,2vw,14px); transition:background 0.2s; white-space:nowrap; flex-shrink:0; }
+  .btn-add-player:hover { background:rgba(45,106,79,0.8); }
+  .saved-players-row { display:flex; flex-wrap:wrap; gap:5px; }
+  .saved-player-chip { display:flex; align-items:center; gap:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(82,183,136,0.25); border-radius:14px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.6rem,1.4vw,0.72rem); padding:3px 10px 3px 8px; transition:background 0.15s,border-color 0.15s; user-select:none; }
+  .saved-player-chip:hover { background:rgba(45,106,79,0.4); border-color:rgba(82,183,136,0.5); }
+  .saved-player-chip.already-added { opacity:0.35; cursor:default; pointer-events:none; }
+  .saved-players-label { font-size:clamp(0.56rem,1.2vw,0.62rem); letter-spacing:0.13em; text-transform:uppercase; color:var(--light-green); opacity:0.65; margin-bottom:2px; display:block; }
+
+  /* Toast */
+  .toast { position:fixed; bottom:clamp(12px,3vw,30px); right:clamp(12px,3vw,30px); left:clamp(12px,3vw,30px); max-width:360px; margin:0 auto; background:var(--green); border:1px solid var(--light-green); border-radius:4px; color:var(--white); font-size:clamp(0.75rem,1.8vw,0.85rem); text-align:center; padding:10px 16px; opacity:0; transform:translateY(10px); transition:all 0.3s; pointer-events:none; z-index:999; }
+  .toast.show { opacity:1; transform:translateY(0); }
+
+  /* Empty state */
+  .no-tees-msg { text-align:center; padding:clamp(32px,8vw,60px) var(--pad); color:var(--light-green); opacity:0.55; }
+  .no-tees-icon { font-size:clamp(2rem,6vw,3rem); display:block; margin-bottom:12px; animation:flag-wave 2s ease-in-out infinite alternate; }
+  .no-tees-msg p { font-size:clamp(0.85rem,2vw,1rem); margin-bottom:4px; }
+  .no-tees-sub { font-size:clamp(0.7rem,1.6vw,0.8rem); opacity:0.7; }
+  .no-tees-days { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:16px; }
+  .btn-day-pick { background:rgba(45,106,79,0.4); border:1px solid rgba(82,183,136,0.35); border-radius:6px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); letter-spacing:0.06em; padding:8px 14px; transition:background 0.18s,border-color 0.18s; opacity:1; }
+  .btn-day-pick:hover { background:rgba(45,106,79,0.7); border-color:rgba(82,183,136,0.6); color:var(--white); }
+
+  /* Add tee time bar */
+  .add-tee-bar { max-width:min(960px,100%); margin:0 auto clamp(10px,2vw,16px); padding:0 var(--pad); display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .add-tee-bar-label { font-size:clamp(0.65rem,1.5vw,0.75rem); letter-spacing:0.12em; text-transform:uppercase; color:var(--light-green); opacity:0.75; white-space:nowrap; flex-shrink:0; }
+  .add-tee-day-btns { display:flex; flex-wrap:wrap; gap:6px; flex:1; }
+  .btn-add-tee-day { background:rgba(45,106,79,0.35); border:1px solid rgba(82,183,136,0.35); border-radius:5px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.68rem,1.6vw,0.8rem); letter-spacing:0.04em; padding:clamp(6px,1.2vw,9px) clamp(8px,1.8vw,13px); transition:background 0.18s,border-color 0.18s,color 0.18s; white-space:nowrap; }
+  .btn-add-tee-day:hover { background:rgba(212,168,83,0.2); border-color:rgba(212,168,83,0.55); color:var(--sand); }
+
+  /* Clickable stats */
+  .stat-clickable { cursor:pointer; transition:border-color 0.2s, background 0.2s; }
+  .stat-clickable:hover { border-color:rgba(212,168,83,0.6); background:rgba(212,168,83,0.1); }
+  .stat-clickable:active { transform:scale(0.97); }
+
+  /* Day form footer */
+  .day-form-footer { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .btn-make-teams { flex:1; background:rgba(212,168,83,0.15); border:1px solid rgba(212,168,83,0.45); border-radius:6px; color:var(--sand); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); font-weight:700; letter-spacing:0.08em; padding:clamp(8px,1.5vw,11px); transition:background 0.2s,border-color 0.2s; text-align:center; }
+  .btn-make-teams:hover { background:rgba(212,168,83,0.28); border-color:var(--sand); }
+
+  /* Teams display */
+  .teams-panel { margin-top:14px; background:rgba(0,0,0,0.18); border:1px solid rgba(212,168,83,0.25); border-radius:6px; overflow:hidden; animation:slide-down 0.22s ease; }
+  .teams-panel-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(212,168,83,0.1); border-bottom:1px solid rgba(212,168,83,0.2); }
+  .teams-panel-title { font-family:'Playfair Display',serif; font-size:clamp(0.82rem,2vw,0.95rem); font-weight:700; color:var(--sand); }
+  .btn-close-teams { background:none; border:none; color:var(--light-green); cursor:pointer; font-size:1rem; padding:2px 6px; }
+  .btn-reshuffle { background:none; border:1px solid rgba(82,183,136,0.4); border-radius:3px; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.62rem,1.4vw,0.7rem); letter-spacing:0.06em; padding:3px 10px; transition:background 0.15s; }
+  .btn-reshuffle:hover { background:rgba(82,183,136,0.15); }
+  .teams-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr)); gap:10px; padding:12px 14px; }
+  .team-card { background:rgba(255,255,255,0.04); border-radius:5px; padding:10px 12px; border-left:3px solid; }
+  .team-name { font-family:'Playfair Display',serif; font-size:clamp(0.78rem,1.8vw,0.88rem); font-weight:700; margin-bottom:6px; }
+  .team-player { display:flex; align-items:center; gap:7px; padding:3px 0; font-size:clamp(0.7rem,1.6vw,0.8rem); color:var(--cream); }
+  .team-player-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .team-player-name { flex:1; }
+  .team-player-hcp { font-size:clamp(0.6rem,1.3vw,0.7rem); color:var(--pale-green); opacity:0.7; white-space:nowrap; }
+  .team-total { font-size:clamp(0.6rem,1.3vw,0.68rem); color:var(--light-green); opacity:0.65; margin-top:6px; padding-top:5px; border-top:1px solid rgba(82,183,136,0.15); letter-spacing:0.06em; }
+  .teams-method { font-size:clamp(0.58rem,1.2vw,0.65rem); color:var(--light-green); opacity:0.55; padding:0 14px 10px; font-style:italic; }
+
+  /* Team size picker */
+  .team-size-picker { display:flex; flex-direction:column; gap:10px; margin-top:12px; background:rgba(0,0,0,0.18); border:1px solid rgba(212,168,83,0.25); border-radius:6px; padding:14px 16px; animation:slide-down 0.22s ease; }
+  .team-size-label { font-family:'Playfair Display',serif; font-size:clamp(0.82rem,2vw,0.95rem); font-weight:700; color:var(--sand); }
+  .team-size-hint { font-size:clamp(0.6rem,1.3vw,0.68rem); color:var(--light-green); opacity:0.65; margin-top:-4px; }
+  .team-size-btns { display:flex; gap:8px; flex-wrap:wrap; }
+  .btn-team-size { flex:1; min-width:70px; background:rgba(0,0,0,0.25); border:1px solid rgba(82,183,136,0.3); border-radius:6px; color:var(--cream); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.75rem,1.8vw,0.88rem); font-weight:700; padding:clamp(8px,1.5vw,12px) 6px; transition:background 0.18s,border-color 0.18s,color 0.18s; text-align:center; }
+  .btn-team-size:hover { background:rgba(212,168,83,0.15); border-color:rgba(212,168,83,0.5); color:var(--sand); }
+  .btn-team-size.disabled-size { opacity:0.3; cursor:not-allowed; pointer-events:none; }
+  .btn-cancel-teams { background:none; border:none; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.65rem,1.4vw,0.72rem); opacity:0.65; text-align:right; padding:2px 0; transition:opacity 0.15s; }
+  .btn-cancel-teams:hover { opacity:1; }
+
+  /* Players modal */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:var(--pad); animation:fade-in 0.18s ease; }
+  .modal-overlay.open { display:flex; }
+  @keyframes fade-in { from{opacity:0} to{opacity:1} }
+  .modal-box { background:var(--fairway); border:1px solid rgba(82,183,136,0.35); border-radius:8px; width:100%; max-width:500px; max-height:85dvh; display:flex; flex-direction:column; overflow:hidden; animation:slide-down 0.22s ease; }
+  .modal-header { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; border-bottom:1px solid rgba(82,183,136,0.15); flex-shrink:0; }
+  .modal-title { font-family:'Playfair Display',serif; font-size:clamp(0.95rem,2.5vw,1.1rem); font-weight:700; color:var(--white); }
+  .modal-close { background:none; border:none; color:var(--light-green); cursor:pointer; font-size:1.2rem; padding:2px 6px; transition:color 0.15s; }
+  .modal-close:hover { color:var(--cream); }
+  .modal-body { overflow-y:auto; padding:14px 18px; display:flex; flex-direction:column; gap:16px; }
+  .modal-day-section { display:flex; flex-direction:column; gap:6px; }
+  .modal-day-heading { font-family:'Playfair Display',serif; font-size:clamp(0.82rem,2vw,0.95rem); font-weight:700; color:var(--sand); border-bottom:1px solid rgba(212,168,83,0.2); padding-bottom:4px; }
+  .modal-group-time { font-size:clamp(0.68rem,1.5vw,0.78rem); color:var(--light-green); letter-spacing:0.08em; margin-top:4px; margin-bottom:2px; }
+  .modal-player-row { display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .modal-player-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .modal-player-name { font-size:clamp(0.78rem,2vw,0.88rem); color:var(--cream); flex:1; }
+  .modal-player-hcp { font-size:clamp(0.62rem,1.4vw,0.72rem); color:var(--pale-green); opacity:0.7; white-space:nowrap; }
+  .modal-player-transport { font-size:0.75rem; opacity:0.6; flex-shrink:0; }
+  .modal-empty { font-size:clamp(0.72rem,1.6vw,0.82rem); color:var(--light-green); opacity:0.55; font-style:italic; text-align:center; padding:20px 0; }
+
+  /* Day picker bar */
+  .day-picker-bar { max-width:min(960px,100%); margin:0 auto clamp(10px,2vw,16px); padding:0 var(--pad); display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .day-picker-label { font-size:clamp(0.62rem,1.4vw,0.72rem); letter-spacing:0.14em; text-transform:uppercase; color:var(--light-green); opacity:0.7; white-space:nowrap; flex-shrink:0; }
+  .day-picker-days { display:flex; gap:6px; flex-wrap:wrap; flex:1; }
+  .btn-day-pick { background:rgba(45,106,79,0.3); border:1px solid rgba(82,183,136,0.3); border-radius:5px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.68rem,1.6vw,0.8rem); letter-spacing:0.04em; padding:clamp(6px,1.2vw,9px) clamp(8px,1.8vw,13px); transition:background 0.18s,border-color 0.18s,color 0.18s; white-space:nowrap; }
+  .btn-day-pick:hover { background:rgba(212,168,83,0.2); border-color:rgba(212,168,83,0.55); color:var(--sand); }
+
+  /* Quick-add tee time modal */
+  .qa-section { display:flex; flex-direction:column; gap:6px; }
+  .qa-label { font-size:clamp(0.6rem,1.4vw,0.68rem); letter-spacing:0.14em; text-transform:uppercase; color:var(--light-green); opacity:0.8; }
+  .qa-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .qa-player-grid { display:flex; flex-wrap:wrap; gap:6px; margin-top:2px; }
+  .qa-player-btn { align-items:center; gap:5px; background:rgba(0,0,0,0.2); border:1px solid rgba(82,183,136,0.25); border-radius:14px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.65rem,1.5vw,0.76rem); padding:5px 12px; transition:all 0.15s; display:inline-flex; }
+  .qa-player-btn.sel { background:rgba(82,183,136,0.22); border-color:var(--light-green); color:var(--white); font-weight:700; }
+  .qa-player-btn.maxed { opacity:0.3; cursor:not-allowed; pointer-events:none; }
+  .qa-add-row { display:flex; gap:6px; margin-top:6px; }
+  .qa-add-row input { flex:1; font-size:max(16px,0.85rem)!important; padding:7px 10px!important; }
+  .qa-add-btn { background:rgba(45,106,79,0.5); border:1px solid var(--light-green); border-radius:3px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:0.8rem; padding:7px 12px; white-space:nowrap; transition:background 0.2s; flex-shrink:0; }
+  .qa-add-btn:hover { background:rgba(45,106,79,0.8); }
+  .qa-count { font-size:clamp(0.6rem,1.3vw,0.68rem); color:var(--light-green); opacity:0.65; }
+  .qa-footer { display:flex; gap:8px; justify-content:flex-end; padding:0 18px 16px; flex-shrink:0; }
+  .qa-cancel { background:none; border:1px solid rgba(82,183,136,0.3); border-radius:4px; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:0.8rem; padding:8px 14px; transition:background 0.15s; }
+  .qa-cancel:hover { background:rgba(82,183,136,0.1); }
+  .qa-save { background:var(--sand); border:none; border-radius:4px; color:var(--dark); cursor:pointer; font-family:'Courier Prime',monospace; font-size:0.85rem; font-weight:700; letter-spacing:0.06em; padding:8px 20px; transition:background 0.2s; }
+  .qa-save:hover { background:#e6b85c; }
+
+  @media(max-width:480px){ .players-summary{display:none} .day-abbr{display:none} }
+
+  /* Landscape on small screens */
+  @media (max-height: 500px) and (orientation: landscape) {
+    .header { padding: 8px var(--pad) 6px; }
+    .header::after { margin: 6px auto 0; }
+    .header-flag { font-size: 20px; margin-bottom: 4px; }
+    .header h1 { font-size: clamp(1rem, 4vh, 1.5rem); }
+    .header p { margin-top: 3px; font-size: 0.6rem; }
+    .course-row { margin-bottom: 8px; }
+    .tee-setup-panel { margin-bottom: 8px; }
+    .summary-bar { padding-bottom: 8px; }
+    .stat { padding: 6px 10px; }
+    .stat-num { font-size: clamp(1rem, 3vh, 1.4rem); }
+    .week-container { padding-bottom: 20px; }
+    .modal-box { max-height: 90dvh; }
+    .modal-body { max-height: calc(90dvh - 120px); }
+    .day-header { padding: 8px 14px; gap: 5px; }
+    .tee-group-body { padding: 8px 12px; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="header-flag">⛳</span>
+  <h1>Tee Time <span>Scheduler</span></h1>
+  <p>Set your rounds for the week</p>
+</div>
+
+<div class="course-row">
+  <div class="course-input-wrap">
+    <span class="course-icon">🏌️</span>
+    <input type="text" id="courseName" placeholder="Enter course name…">
+  </div>
+</div>
+
+<div class="tee-setup-panel" id="teeSetupPanel">
+  <div class="tee-setup-toggle" onclick="toggleTeeSetup()">
+    <span style="font-size:1.2rem;flex-shrink:0">⛳</span>
+    <span class="tee-setup-toggle-label">Course Tees</span>
+    <span class="tee-setup-toggle-sub" id="teeSetupSub">Configure tees &amp; ratings</span>
+    <span class="tee-setup-arrow">▾</span>
+  </div>
+  <div class="tee-setup-body">
+    <div class="tee-rows" id="teeRows"><p style="font-size:.75rem;color:var(--light-green);opacity:.6;padding:4px 0">No tees yet — click "+ Add Tee"</p></div>
+    <button class="btn-add-tee" onclick="addTee()">+ Add Tee</button>
+    <p class="tee-setup-hint">Playing Handicap = Index × (Slope ÷ 113) + (Course Rating − Par)</p>
+  </div>
+</div>
+
+<div class="summary-bar">
+  <div class="stat stat-clickable" onclick="showAllTeeTimes()" title="View all tee times">
+    <span class="stat-num" id="statRounds">0</span>
+    <span class="stat-label">Tee Times ▾</span>
+  </div>
+  <div class="stat stat-clickable" onclick="showAllPlayers()" title="View all players">
+    <span class="stat-num" id="statPlayers">0</span>
+    <span class="stat-label">Total Players ▾</span>
+  </div>
+  <div class="stat stat-clickable" onclick="goToEarliestTee()" title="Jump to earliest tee time">
+    <span class="stat-num" id="statEarliest">—</span>
+    <span class="stat-label">Earliest Tee ▸</span>
+  </div>
+</div>
+
+
+<!-- Players modal -->
+<div id="playersModal" class="modal-overlay" onclick="closePlayersModal()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">All Players This Week</span>
+      <button class="modal-close" onclick="closePlayersModal()">✕</button>
+    </div>
+    <div class="modal-body" id="playersModalBody"></div>
+  </div>
+</div>
+
+<!-- Tee Times modal -->
+<div id="teeTimesModal" class="modal-overlay" onclick="closeTeeTimesModal()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Tee Times This Week</span>
+      <button class="modal-close" onclick="closeTeeTimesModal()">✕</button>
+    </div>
+    <div class="modal-body" id="teeTimesModalBody"></div>
+  </div>
+</div>
+
+<!-- Quick-add tee time modal -->
+<div id="qaModal" class="modal-overlay" onclick="qaClose()">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title" id="qaTitle">Add Tee Time</span>
+      <button class="modal-close" onclick="qaClose()">✕</button>
+    </div>
+    <div class="modal-body" id="qaBody"></div>
+    <div class="qa-footer">
+      <button class="qa-cancel" onclick="qaClose()">Cancel</button>
+      <button class="qa-save" onclick="qaSave()">Add Tee Time</button>
+    </div>
+  </div>
+</div>
+
+<div class="week-container" id="weekContainer">
+  <div id="noTeesMsg" class="no-tees-msg" style="">
+    <span class="no-tees-icon">⛳</span>
+    <p>No tee times scheduled yet.</p>
+    <p class="no-tees-sub">Tap a day to get started</p>
+    <div class="no-tees-days" id="noTeesDays"><button class="btn-day-pick">Sunday</button><button class="btn-day-pick">Monday</button><button class="btn-day-pick">Tuesday</button><button class="btn-day-pick">Wednesday</button><button class="btn-day-pick">Thursday</button><button class="btn-day-pick">Friday</button><button class="btn-day-pick">Saturday</button></div>
+  </div>
+<div class="day-card" id="card-Sunday" style="display: none;">
+    <div class="day-header" onclick="toggleCard(&#39;Sunday&#39;)">
+      <div class="day-header-top">
+        <div class="day-name">Sunday<span class="day-abbr">SUN</span><span class="day-date">Apr 12</span></div>
+        <div style="flex:1"></div>
+        <span class="players-summary" id="psum-Sunday"></span>
+        <span class="toggle-icon">▾</span>
+      </div>
+      <div class="day-summary" id="summary-Sunday"></div>
+    </div>
+    <div class="day-form" id="form-Sunday">
+      <div class="tee-groups" id="groups-Sunday"></div>
+      <div class="day-form-footer">
+        <button class="btn-add-group" onclick="addGroup(&#39;Sunday&#39;)">+ Add Tee Time</button>
+        <button class="btn-make-teams" onclick="makeTeams(&#39;Sunday&#39;)">⚔ Make Teams</button>
+      </div>
+      <div id="teams-Sunday"></div>
+    </div></div><div class="day-card" id="card-Monday" style="display: none;">
+    <div class="day-header" onclick="toggleCard(&#39;Monday&#39;)">
+      <div class="day-header-top">
+        <div class="day-name">Monday<span class="day-abbr">MON</span><span class="day-date">Apr 13</span></div>
+        <div style="flex:1"></div>
+        <span class="players-summary" id="psum-Monday"></span>
+        <span class="toggle-icon">▾</span>
+      </div>
+      <div class="day-summary" id="summary-Monday"></div>
+    </div>
+    <div class="day-form" id="form-Monday">
+      <div class="tee-groups" id="groups-Monday"></div>
+      <div class="day-form-footer">
+        <button class="btn-add-group" onclick="addGroup(&#39;Monday&#39;)">+ Add Tee Time</button>
+        <button class="btn-make-teams" onclick="makeTeams(&#39;Monday&#39;)">⚔ Make Teams</button>
+      </div>
+      <div id="teams-Monday"></div>
+    </div></div><div class="day-card" id="card-Tuesday" style="display: none;">
+    <div class="day-header" onclick="toggleCard(&#39;Tuesday&#39;)">
+      <div class="day-header-top">
+        <div class="day-name">Tuesday<span class="day-abbr">TUE</span><span class="day-date">Apr 14</span></div>
+        <div style="flex:1"></div>
+        <span class="players-summary" id="psum-Tuesday"></span>
+        <span class="toggle-icon">▾</span>
+      </div>
+      <div class="day-summary" id="summary-Tuesday"></div>
+    </div>
+    <div class="day-form" id="form-Tuesday">
+      <div class="tee-groups" id="groups-Tuesday"></div>
+      <div class="day-form-footer">
+        <button class="btn-add-group" onclick="addGroup(&#39;Tuesday&#39;)">+ Add Tee Time</button>
+        <button class="btn-make-teams" onclick="makeTeams(&#39;Tuesday&#39;)">⚔ Make Teams</button>
+      </div>
+      <div id="teams-Tuesday"></div>
+    </div></div><div class="day-card" id="card-Wednesday" style="display: none;">
+    <div class="day-header" onclick="toggleCard(&#39;Wednesday&#39;)">
+      <div class="day-header-top">
+        <div class="day-name">Wednesday<span class="day-abbr">WED</span><span class="day-date">Apr 15</span></div>
+        <div style="flex:1"></div>
+        <span class="players-summary" id="psum-Wednesday"></span>
+        <span class="toggle-icon">▾</span>
+      </div>
+      <div class="day-summary" id="summary-Wednesday"></div>
+    </div>
+    <div class="day-form" id="form-Wednesday">
+      <div class="tee-groups" id="groups-Wednesday"></div>
+      <div class="day-form-footer">
+        <button class="btn-add-group" onclick="addGroup(&#39;Wednesday&#39;)">+ Add Tee Time</button>
+        <button class="btn-make-teams" onclick="makeTeams(&#39;Wednesday&#39;)">⚔ Make Teams</button>
+      </div>
+      <div id="teams-Wednesday"></div>
+    </div></div><div class="day-card" id="card-Thursday" style="display: none;">
+    <div class="day-header" onclick="toggleCard(&#39;Thursday&#39;)">
+      <div class="day-header-top">
+        <div class="day-name">Thursday<span class="day-abbr">THU</span><span class="day-date">Apr 16</span></div>
+        <div style="flex:1"></div>
+        <span class="players-summary" id="psum-Thursday"></span>
+        <span class="toggle-icon">▾</span>
+      </div>
+      <div class="day-summary" id="summary-Thursday"></div>
+    </div>
+    <div class="day-form" id="form-Thursday">
+      <div class="tee-groups" id="groups-Thursday"></div>
+      <div class="day-form-footer">
+        <button class="btn-add-group" onclick="addGroup(&#39;Thursday&#39;)">+ Add Tee Time</button>
+        <button class="btn-make-teams" onclick="makeTeams(&#39;Thursday&#39;)">⚔ Make Teams</button>
+      </div>
+      <div id="teams-Thursday"></div>
+    </div></div><div class="day-card" id="card-Friday" style="display: none;">
+    <div class="day-header" onclick="toggleCard(&#39;Friday&#39;)">
+      <div class="day-header-top">
+        <div class="day-name">Friday<span class="day-abbr">FRI</span><span class="day-date">Apr 17</span></div>
+        <div style="flex:1"></div>
+        <span class="players-summary" id="psum-Friday"></span>
+        <span class="toggle-icon">▾</span>
+      </div>
+      <div class="day-summary" id="summary-Friday"></div>
+    </div>
+    <div class="day-form" id="form-Friday">
+      <div class="tee-groups" id="groups-Friday"></div>
+      <div class="day-form-footer">
+        <button class="btn-add-group" onclick="addGroup(&#39;Friday&#39;)">+ Add Tee Time</button>
+        <button class="btn-make-teams" onclick="makeTeams(&#39;Friday&#39;)">⚔ Make Teams</button>
+      </div>
+      <div id="teams-Friday"></div>
+    </div></div><div class="day-card" id="card-Saturday" style="display: none;">
+    <div class="day-header" onclick="toggleCard(&#39;Saturday&#39;)">
+      <div class="day-header-top">
+        <div class="day-name">Saturday<span class="day-abbr">SAT</span><span class="day-date">Apr 18</span></div>
+        <div style="flex:1"></div>
+        <span class="players-summary" id="psum-Saturday"></span>
+        <span class="toggle-icon">▾</span>
+      </div>
+      <div class="day-summary" id="summary-Saturday"></div>
+    </div>
+    <div class="day-form" id="form-Saturday">
+      <div class="tee-groups" id="groups-Saturday"></div>
+      <div class="day-form-footer">
+        <button class="btn-add-group" onclick="addGroup(&#39;Saturday&#39;)">+ Add Tee Time</button>
+        <button class="btn-make-teams" onclick="makeTeams(&#39;Saturday&#39;)">⚔ Make Teams</button>
+      </div>
+      <div id="teams-Saturday"></div>
+    </div></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const ABBR  = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const HOLES = ['9 Holes','18 Holes','27 Holes','36 Holes'];
+const API   = '/api';
+
+let _uidN = 0;
+function uid() { return 'u' + Date.now() + '_' + (++_uidN); }
+
+// ── API ───────────────────────────────────────────────────
+async function apiFetch(method, path, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  if (!r.ok) throw new Error(`${method} ${path} ${r.status}`);
+  return r.status === 204 ? null : r.json();
+}
+
+// ── Time helpers ──────────────────────────────────────────
+// Store as ISO so the same browser reads back the same day/time
+function dayTimeToISO(dayName, timeStr) {
+  const today = new Date();
+  const diff  = DAYS.indexOf(dayName) - today.getDay();
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diff);
+  if (timeStr) { const [h,m] = timeStr.split(':'); d.setHours(+h,+m,0,0); }
+  else d.setHours(12,0,0,0); // noon avoids DST edge cases
+  return d.toISOString();
+}
+function isoToDay(iso)  { return DAYS[new Date(iso).getDay()]; }
+function isoToTime(iso) {
+  const d = new Date(iso);
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+// Pack holes into notes field (API has no holes column)
+function packNotes(holes, notes) {
+  return JSON.stringify({ holes: holes||'18 Holes', text: notes||'' });
+}
+function unpackNotes(raw) {
+  try { const p=JSON.parse(raw); if(p&&p.holes) return {holes:p.holes, notes:p.text||''}; } catch(e){}
+  return { holes:'18 Holes', notes: raw||'' };
+}
+
+// ── State ─────────────────────────────────────────────────
+const state = {};
+DAYS.forEach(d => { state[d] = { groups: [] }; });
+let currentCourseId = null;
+let playerRoster    = [];
+
+function newGroup() {
+  return { id: uid(), apiId: null, time: '', holes: '18 Holes', notes: '', players: [] };
+}
+
+// ── UI prefs (transport/selectedTee stay in localStorage) ─
+function loadPrefs() {
+  try { return JSON.parse(localStorage.getItem('golfPrefsV1') || '{}'); } catch(e) { return {}; }
+}
+function savePrefs() {
+  try {
+    const p = {};
+    DAYS.forEach(day => state[day].groups.forEach(g => {
+      if (!g.apiId) return;
+      g.players.forEach(pl => {
+        p[`${g.apiId}:${pl.name}`] = { transport: pl.transport||'walk', selectedTee: pl.selectedTee||null };
+      });
+    }));
+    p._teeOpen = teeState.open;
+    localStorage.setItem('golfPrefsV1', JSON.stringify(p));
+  } catch(e) {}
+}
+function applyPrefs() {
+  const p = loadPrefs();
+  DAYS.forEach(day => state[day].groups.forEach(g => {
+    g.players.forEach(pl => {
+      const k = `${g.apiId}:${pl.name}`;
+      if (p[k]) { pl.transport = p[k].transport||'walk'; pl.selectedTee = p[k].selectedTee||null; }
+    });
+  }));
+  if (p._teeOpen) teeState.open = p._teeOpen;
+}
+// saveState is called by legacy code paths — just persist prefs now
+function saveState() { savePrefs(); }
+
+// ── Ensure a course row exists ────────────────────────────
+async function ensureCourse() {
+  if (currentCourseId) return currentCourseId;
+  try {
+    const list = await apiFetch('GET', '/courses');
+    if (list.length) { currentCourseId = list[0].id; return currentCourseId; }
+    const name = document.getElementById('courseName').value.trim() || 'My Course';
+    const c = await apiFetch('POST', '/courses', { name });
+    currentCourseId = c.id;
+    return currentCourseId;
+  } catch(e) { console.error('ensureCourse:', e); return null; }
+}
+
+// ── Load everything from API ──────────────────────────────
+async function loadAll() {
+  try {
+    const [teeTimes, players, courses] = await Promise.all([
+      apiFetch('GET', '/tee-times'),
+      apiFetch('GET', '/players'),
+      apiFetch('GET', '/courses'),
+    ]);
+
+    // Roster
+    playerRoster = players.map(p => ({
+      apiId: p.id, name: p.name,
+      handicap: p.handicap != null ? String(p.handicap) : ''
+    }));
+
+    // Course + tees
+    if (courses.length) {
+      currentCourseId = courses[0].id;
+      document.getElementById('courseName').value = courses[0].name || '';
+      const tees = await apiFetch('GET', `/tees?course_id=${currentCourseId}`);
+      teeState.tees = tees.map(t => ({
+        id: String(t.id), apiId: t.id,
+        name: t.name||'', color: t.color||'#ffffff',
+        rating: t.rating != null ? String(t.rating) : '',
+        slope:  t.slope  != null ? String(t.slope)  : '',
+        par:    t.par    != null ? t.par : 72,
+      }));
+    }
+
+    // Tee times → state
+    DAYS.forEach(d => { state[d].groups = []; });
+    teeTimes.forEach(tt => {
+      const day = isoToDay(tt.tee_time);
+      if (!state[day]) return;
+      const { holes, notes } = unpackNotes(tt.notes);
+      state[day].groups.push({
+        id:     'api_' + tt.id,
+        apiId:  tt.id,
+        time:   isoToTime(tt.tee_time),
+        holes, notes,
+        players: (tt.players||[]).map(p => ({
+          name:       p.name,
+          apiId:      p.id,
+          transport:  'walk',
+          handicap:   p.handicap != null ? String(p.handicap) : '',
+          selectedTee: null,
+        })),
+      });
+    });
+
+    applyPrefs();
+  } catch(e) {
+    showToast('⚠ Could not connect to server');
+    console.error('loadAll:', e);
+  }
+}
+
+// ── 30-second sync ────────────────────────────────────────
+async function syncFromAPI() {
+  try {
+    const [teeTimes, players] = await Promise.all([
+      apiFetch('GET', '/tee-times'),
+      apiFetch('GET', '/players'),
+    ]);
+    playerRoster = players.map(p => ({
+      apiId: p.id, name: p.name,
+      handicap: p.handicap != null ? String(p.handicap) : ''
+    }));
+    DAYS.forEach(d => { state[d].groups = []; });
+    teeTimes.forEach(tt => {
+      const day = isoToDay(tt.tee_time);
+      if (!state[day]) return;
+      const { holes, notes } = unpackNotes(tt.notes);
+      state[day].groups.push({
+        id: 'api_'+tt.id, apiId: tt.id,
+        time: isoToTime(tt.tee_time), holes, notes,
+        players: (tt.players||[]).map(p => ({
+          name: p.name, apiId: p.id, transport:'walk',
+          handicap: p.handicap != null ? String(p.handicap) : '',
+          selectedTee: null,
+        })),
+      });
+    });
+    applyPrefs();
+    DAYS.forEach(day => {
+      updateCardBadge(day);
+      const card = document.getElementById('card-'+day);
+      if (card && card.classList.contains('open')) renderDay(day);
+    });
+    updateStats();
+  } catch(e) { console.error('sync:', e); }
+}
+
+// ── Formatting ────────────────────────────────────────────
+function formatTime(t) {
+  if (!t) return '';
+  const [h, m] = t.split(':');
+  const hr = parseInt(h), ampm = hr >= 12 ? 'PM' : 'AM', hr12 = hr % 12 || 12;
+  return `${hr12}:${m} ${ampm}`;
+}
+
+// ── Day Cards ─────────────────────────────────────────────
+function getDayDate(dayName) {
+  const today = new Date();
+  const diff  = DAYS.indexOf(dayName) - today.getDay();
+  const d = new Date(today);
+  d.setDate(today.getDate() + diff);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function buildCard(day, index) {
+  const card = document.createElement('div');
+  card.className = 'day-card';
+  card.id = 'card-' + day;
+  const dateStr = getDayDate(day);
+  card.innerHTML = `
+    <div class="day-header" onclick="toggleCard('${day}')">
+      <div class="day-header-top">
+        <div class="day-name">${day}<span class="day-abbr">${ABBR[index]}</span><span class="day-date">${dateStr}</span></div>
+        <div style="flex:1"></div>
+        <span class="players-summary" id="psum-${day}"></span>
+        <span class="toggle-icon">▾</span>
+      </div>
+      <div class="day-summary" id="summary-${day}"></div>
+    </div>
+    <div class="day-form" id="form-${day}">
+      <div class="tee-groups" id="groups-${day}"></div>
+      <div class="day-form-footer">
+        <button class="btn-add-group" onclick="addGroup('${day}')">+ Add Tee Time</button>
+        <button class="btn-make-teams" onclick="makeTeams('${day}')">⚔ Make Teams</button>
+      </div>
+      <div id="teams-${day}"></div>
+    </div>`;
+  document.getElementById('weekContainer').appendChild(card);
+}
+
+function toggleCard(day) {
+  const card = document.getElementById('card-' + day);
+  const isOpen = card.classList.contains('open');
+  document.querySelectorAll('.day-card.open').forEach(c => c.classList.remove('open'));
+  if (!isOpen) { card.classList.add('open'); renderDay(day); }
+}
+
+// ── Groups ────────────────────────────────────────────────
+async function addGroup(day) {
+  const g = newGroup();
+  state[day].groups.push(g);
+  renderDay(day); updateCardBadge(day); updateStats();
+  try {
+    const courseId = await ensureCourse();
+    if (!courseId) return;
+    const result = await apiFetch('POST', '/tee-times', {
+      course_id:   courseId,
+      tee_time:    dayTimeToISO(day, g.time),
+      max_players: 4,
+      notes:       packNotes(g.holes, g.notes),
+    });
+    g.apiId = result.id;
+    g.id    = 'api_' + result.id;
+  } catch(e) { showToast('⚠ Failed to save tee time'); console.error(e); }
+}
+
+async function removeGroup(day, gid) {
+  const g = state[day].groups.find(x => x.id === gid);
+  const apiId = g && g.apiId;
+  state[day].groups = state[day].groups.filter(x => x.id !== gid);
+  renderDay(day); updateCardBadge(day); updateStats();
+  if (apiId) {
+    try { await apiFetch('DELETE', `/tee-times/${apiId}`); } catch(e) { console.error(e); }
+  }
+}
+
+async function saveTeeTime(g, day) {
+  if (!g.apiId) return;
+  const courseId = await ensureCourse();
+  if (!courseId) return;
+  try {
+    await apiFetch('PUT', `/tee-times/${g.apiId}`, {
+      course_id: courseId,
+      tee_time:  dayTimeToISO(day, g.time),
+      notes:     packNotes(g.holes, g.notes),
+    });
+  } catch(e) { console.error('saveTeeTime:', e); }
+}
+
+function renderDay(day) {
+  const container = document.getElementById('groups-' + day);
+  container.innerHTML = '';
+  state[day].groups.forEach((g, gi) => renderGroup(day, g, gi, container));
+  state[day].groups.forEach(g => renderGroupRoster(day, g));
+  const addBtn = document.querySelector(`#form-${day} .btn-add-group`);
+  if (addBtn) {
+    const groups = state[day].groups;
+    const canAdd = groups.length === 0 || (groups[groups.length-1].players||[]).length >= 1;
+    addBtn.style.display = canAdd ? '' : 'none';
+  }
+}
+
+function renderGroup(day, g, gi, container) {
+  const div = document.createElement('div');
+  div.className = 'tee-group';
+  div.id = 'grp-' + g.id;
+  const pCount = (g.players||[]).length;
+  div.innerHTML = `
+    <div class="tee-group-header">
+      <span class="tee-group-num">TEE TIME ${gi+1}</span>
+      <span class="tee-group-time-display" id="gtd-${g.id}">${g.time ? formatTime(g.time) : 'No time set'}</span>
+      <span class="tee-group-players-count" id="gpc-${g.id}" style="${pCount>=4?'color:#f0c520':''}">${pCount}/4 players</span>
+      <button class="btn-remove-group" onclick="removeGroup('${day}','${g.id}')">✕ Remove</button>
+    </div>
+    <div class="tee-group-body">
+      <div class="tee-group-fields">
+        <div class="form-group">
+          <label>Tee Time</label>
+          <input type="time" id="gt-${g.id}" value="${g.time}" />
+        </div>
+        <div class="form-group">
+          <label>Holes</label>
+          <select id="gh-${g.id}">${HOLES.map(h=>`<option${h===g.holes?' selected':''}>${h}</option>`).join('')}</select>
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Notes</label>
+          <textarea id="gn-${g.id}" placeholder="Any special notes…">${g.notes||''}</textarea>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Players</label>
+        <div class="players-row" id="gc-${g.id}"></div>
+        <div class="add-player-row" id="ga-${g.id}" style="${pCount>=4?'display:none':''}">
+          <div class="add-player-name-row">
+            <input type="text" id="gfirst-${g.id}" placeholder="First name" />
+            <input type="text" id="glast-${g.id}"  placeholder="Last name" />
+            <button class="btn-add-player" onclick="addPlayer('${day}','${g.id}')">+ Add</button>
+          </div>
+          <div id="gr-${g.id}"></div>
+        </div>
+      </div>
+    </div>`;
+  container.appendChild(div);
+  renderGroupChips(day, g);
+
+  document.getElementById('gt-'+g.id).addEventListener('change', () => {
+    g.time = document.getElementById('gt-'+g.id).value;
+    const d = document.getElementById('gtd-'+g.id);
+    if (d) d.textContent = g.time ? formatTime(g.time) : 'No time set';
+    updateCardBadge(day); updateStats();
+    saveTeeTime(g, day);
+  });
+  document.getElementById('gh-'+g.id).addEventListener('change', () => {
+    g.holes = document.getElementById('gh-'+g.id).value;
+    saveTeeTime(g, day);
+  });
+  document.getElementById('gn-'+g.id).addEventListener('input', () => {
+    g.notes = document.getElementById('gn-'+g.id).value;
+    saveTeeTime(g, day);
+  });
+  ['gfirst-','glast-'].forEach(prefix => {
+    const el = document.getElementById(prefix+g.id);
+    if (el) el.addEventListener('keydown', e => { if (e.key==='Enter') addPlayer(day, g.id); });
+  });
+}
+
+// ── Players ───────────────────────────────────────────────
+function renderGroupChips(day, g) {
+  const container = document.getElementById('gc-'+g.id);
+  if (!container) return;
+  container.innerHTML = '';
+  (g.players||[]).forEach((p, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'player-chip';
+    const tee = p.selectedTee ? teeState.tees.find(t => t.id===p.selectedTee) : null;
+    const hcp = calcHcp(p.handicap, tee);
+    const tc  = tee ? tee.color : null;
+    if (tc) chip.style.cssText = `border-color:${tc}55;box-shadow:inset 3px 0 0 ${tc};background:color-mix(in srgb,${tc} 8%,rgba(45,106,79,0.4))`;
+    const nameStyle = tc ? `color:color-mix(in srgb,${tc} 60%,var(--pale-green))` : '';
+    const teeBtns = teeState.tees.length===0
+      ? '<span class="tee-no-data">No tees configured above ↑</span>'
+      : teeState.tees.map(t=>`
+          <button class="player-tee-btn${t.id===p.selectedTee?' selected':''}"
+            onclick="setTee('${day}','${g.id}',${i},'${t.id}')">
+            <span class="tee-dot" style="background:${t.color}"></span>${t.name||'—'}
+          </button>`).join('');
+    let hcpHtml = '';
+    if (hcp!==null) {
+      hcpHtml = `<div class="player-hcp-result" style="background:color-mix(in srgb,${tc} 12%,transparent);border-color:color-mix(in srgb,${tc} 50%,transparent)">
+        <span class="player-hcp-result-num" style="color:${tc}">${hcp}</span>
+        <span class="player-hcp-result-label">Playing Handicap</span>
+        <span class="player-hcp-result-tee">${tee.name} · ${tee.rating}/${tee.slope}</span>
+      </div>`;
+    } else if (p.handicap && p.selectedTee) {
+      hcpHtml = '<p class="tee-no-data" style="margin-top:2px">Complete tee rating &amp; slope to calculate</p>';
+    }
+    const nameParts = p.name.trim().split(' ');
+    const firstName = nameParts[0]||'';
+    const lastName  = nameParts.slice(1).join(' ');
+    chip.innerHTML = `
+      <div class="chip-top-row">
+        <div class="player-name-stack">
+          <input class="player-name-input player-firstname" style="${nameStyle}" value="${firstName.replace(/"/g,'&quot;')}"
+            placeholder="First" title="Edit first name"
+            onchange="renamePlayerParts('${day}','${g.id}',${i},this.value,document.getElementById('pln-${g.id}-${i}').value)"
+            onblur="renamePlayerParts('${day}','${g.id}',${i},this.value,document.getElementById('pln-${g.id}-${i}').value)" />
+          <input class="player-name-input player-lastname" id="pln-${g.id}-${i}" style="${nameStyle}" value="${lastName.replace(/"/g,'&quot;')}"
+            placeholder="Last" title="Edit last name"
+            onchange="renamePlayerParts('${day}','${g.id}',${i},document.getElementById('pln-${g.id}-${i}').previousElementSibling.value,this.value)"
+            onblur="renamePlayerParts('${day}','${g.id}',${i},document.getElementById('pln-${g.id}-${i}').previousElementSibling.value,this.value)" />
+        </div>
+        <div class="transport-toggle">
+          <button class="${p.transport==='walk'?'active-walk':''}" onclick="setTransport('${day}','${g.id}',${i},'walk')">🚶 Walk</button>
+          <button class="${p.transport==='ride'?'active-ride':''}" onclick="setTransport('${day}','${g.id}',${i},'ride')">🛺 Ride</button>
+        </div>
+        <button class="remove-btn" onclick="removePlayer('${day}','${g.id}',${i})">✕ Remove</button>
+      </div>
+      <div class="player-handicap-row">
+        <span class="handicap-label">Handicap Index</span>
+        <input class="handicap-input" type="text" inputmode="decimal" placeholder="e.g. 12.4"
+          value="${p.handicap||''}"
+          onchange="setHandicap('${day}','${g.id}',${i},this.value)"
+          onblur="setHandicap('${day}','${g.id}',${i},this.value)" />
+      </div>
+      <div class="player-tee-row">
+        <span class="player-tee-label">Tee</span>
+        <div class="player-tee-btns">${teeBtns}</div>
+      </div>
+      ${hcpHtml}`;
+    container.appendChild(chip);
+  });
+  const count = (g.players||[]).length;
+  const cnt = document.getElementById('gpc-'+g.id);
+  if (cnt) { cnt.textContent=`${count}/4 players`; cnt.style.color=count>=4?'#f0c520':''; }
+  const addRow = document.getElementById('ga-'+g.id);
+  if (addRow) addRow.style.display = count>=4?'none':'';
+}
+
+async function addPlayer(day, gid, nameOverride) {
+  const g = state[day].groups.find(x => x.id===gid);
+  if (!g) return;
+  if ((g.players||[]).length>=4) { showToast('Max 4 players per tee time!'); return; }
+  let name;
+  if (nameOverride) {
+    name = nameOverride.trim();
+  } else {
+    const first = (document.getElementById('gfirst-'+gid)||{}).value||'';
+    const last  = (document.getElementById('glast-' +gid)||{}).value||'';
+    name = [first.trim(),last.trim()].filter(Boolean).join(' ');
+  }
+  if (!name) { showToast('Enter a first name at minimum.'); return; }
+  if ((g.players||[]).some(p=>p.name===name)) { showToast('Player already in this group!'); return; }
+
+  let rosterEntry = playerRoster.find(p=>p.name===name);
+  const playerObj = { name, transport:'walk', handicap: rosterEntry?(rosterEntry.handicap||''):'', selectedTee:null, apiId: rosterEntry?rosterEntry.apiId:null };
+
+  if (!rosterEntry) {
+    try {
+      const result = await apiFetch('POST', '/players', { name });
+      playerObj.apiId = result.id;
+      playerRoster.push({ apiId:result.id, name, handicap:'' });
+    } catch(e) { console.error('create player:', e); }
+  }
+
+  if (!g.players) g.players=[];
+  g.players.push(playerObj);
+
+  if (g.apiId && playerObj.apiId) {
+    try { await apiFetch('POST', `/tee-times/${g.apiId}/players`, { player_id:playerObj.apiId }); }
+    catch(e) { console.error('add player to tee time:', e); }
+  }
+
+  const fi=document.getElementById('gfirst-'+gid); if(fi) fi.value='';
+  const li=document.getElementById('glast-' +gid); if(li) li.value='';
+  renderGroupChips(day,g); renderGroupRoster(day,g);
+  updateCardBadge(day); updateStats(); refreshAddBtn(day);
+}
+
+async function removePlayer(day, gid, idx) {
+  const g = state[day].groups.find(x=>x.id===gid);
+  if (!g) return;
+  const player     = g.players[idx];
+  const playerApiId = player&&player.apiId;
+  g.players.splice(idx,1);
+  renderGroupChips(day,g); renderGroupRoster(day,g);
+  updateCardBadge(day); updateStats(); refreshAddBtn(day);
+  if (g.apiId && playerApiId) {
+    try { await apiFetch('DELETE', `/tee-times/${g.apiId}/players`, { player_id:playerApiId }); }
+    catch(e) { console.error('removePlayer:', e); }
+  }
+}
+
+function refreshAddBtn(day) {
+  const addBtn = document.querySelector(`#form-${day} .btn-add-group`);
+  if (!addBtn) return;
+  const groups = state[day].groups;
+  const canAdd = groups.length===0 || (groups[groups.length-1].players||[]).length>=1;
+  addBtn.style.display = canAdd?'':'none';
+}
+
+function setTransport(day, gid, idx, mode) {
+  const g=state[day].groups.find(x=>x.id===gid); if(!g) return;
+  g.players[idx].transport=mode;
+  renderGroupChips(day,g); savePrefs();
+}
+
+async function setHandicap(day, gid, idx, value) {
+  const g=state[day].groups.find(x=>x.id===gid); if(!g) return;
+  g.players[idx].handicap=value;
+  syncRosterHandicap(g.players[idx].name, value);
+  renderGroupChips(day,g); savePrefs();
+  const apiId=g.players[idx].apiId;
+  if (apiId) {
+    try { await apiFetch('PUT', `/players/${apiId}`, { handicap: value||null }); }
+    catch(e) { console.error('setHandicap:', e); }
+  }
+}
+
+function setTee(day, gid, idx, teeId) {
+  const g=state[day].groups.find(x=>x.id===gid); if(!g) return;
+  g.players[idx].selectedTee = g.players[idx].selectedTee===teeId ? null : teeId;
+  renderGroupChips(day,g); savePrefs();
+}
+
+async function renamePlayerParts(day, gid, idx, first, last) {
+  const name=[first.trim(),last.trim()].filter(Boolean).join(' ');
+  if (!name) return;
+  const g=state[day].groups.find(x=>x.id===gid);
+  if (!g||!g.players[idx]) return;
+  const oldName=g.players[idx].name;
+  if (name===oldName) return;
+  const apiId=g.players[idx].apiId;
+  g.players[idx].name=name;
+  const entry=playerRoster.find(p=>p.name===oldName);
+  if (entry) entry.name=name; else playerRoster.push({name,handicap:''});
+  updateCardBadge(day);
+  if (apiId) { try { await apiFetch('PUT',`/players/${apiId}`,{name}); } catch(e){console.error(e);} }
+}
+
+// ── Roster ────────────────────────────────────────────────
+function renderGroupRoster(day, g) {
+  const c=document.getElementById('gr-'+g.id); if(!c) return;
+  const available=playerRoster.filter(p=>p.name);
+  if (!available.length) { c.innerHTML=''; return; }
+  const added=new Set((g.players||[]).map(p=>p.name));
+  c.innerHTML=`<span class="saved-players-label">Saved Players</span>
+    <div class="saved-players-row">${available.map(p=>{
+      const grey=added.has(p.name)?' already-added':'';
+      const hcp =p.handicap?` <span style="opacity:.5">(${p.handicap})</span>`:'';
+      return `<button class="saved-player-chip${grey}" onclick="addPlayer('${day}','${g.id}','${p.name.replace(/'/g,"\\'")}')">●&nbsp;${p.name}${hcp}</button>`;
+    }).join('')}</div>`;
+}
+
+function syncRosterHandicap(name, handicap) {
+  const e=playerRoster.find(p=>p.name===name); if(e) e.handicap=handicap;
+}
+
+// ── Handicap calc ─────────────────────────────────────────
+function calcHcp(index, tee) {
+  if (index===''||index==null) return null;
+  if (!tee||tee.rating===''||tee.slope===''||tee.par==='') return null;
+  const i=parseFloat(index),r=parseFloat(tee.rating),s=parseFloat(tee.slope),par=parseFloat(tee.par);
+  if ([i,r,s,par].some(isNaN)) return null;
+  return Math.round(i*(s/113)+(r-par));
+}
+
+// ── Card badge & stats ────────────────────────────────────
+function updateCardBadge(day) {
+  const groups=state[day].groups||[];
+  const card  =document.getElementById('card-'+day);
+  const sumEl =document.getElementById('summary-'+day);
+  const psumEl=document.getElementById('psum-'+day);
+  const active=groups.filter(g=>g.time||(g.players&&g.players.length>0));
+  const total =groups.reduce((s,g)=>s+(g.players?g.players.length:0),0);
+  if (active.length>0) {
+    card.style.display=''; card.classList.add('has-tee-time');
+    const sorted=[...active].sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+    let html=sorted.map(g=>{
+      const t=g.time?formatTime(g.time):'<span style="opacity:.45;font-style:italic">No time</span>';
+      const pills=(g.players||[]).length
+        ?g.players.map(p=>`<span class="day-summary-player-pill">${p.name}</span>`).join('')
+        :'<span class="day-summary-no-players">No players yet</span>';
+      return `<div class="day-summary-row"><span class="day-summary-time">${t}</span><div class="day-summary-players">${pills}</div></div>`;
+    }).join('');
+    const booked=sorted.filter(g=>g.time).length;
+    if (total>0) html+=`<div class="day-summary-total">Total: ${total} player${total!==1?'s':''} · ${booked} tee time${booked!==1?'s':''}</div>`;
+    sumEl.innerHTML=html; psumEl.textContent='';
+  } else {
+    card.style.display='none'; card.classList.remove('has-tee-time');
+    sumEl.innerHTML=''; psumEl.textContent='';
+  }
+  const anyVisible=DAYS.some(d=>{const c=document.getElementById('card-'+d);return c&&c.style.display!=='none';});
+  const emptyEl=document.getElementById('noTeesMsg');
+  if (emptyEl) emptyEl.style.display=anyVisible?'none':'';
+}
+
+function updateStats() {
+  const all   =DAYS.flatMap(d=>state[d].groups||[]);
+  const booked=all.filter(g=>g.time);
+  document.getElementById('statRounds').textContent=booked.length;
+  const total=all.reduce((s,g)=>s+(g.players?g.players.length:0),0);
+  document.getElementById('statPlayers').textContent=total;
+  if (!booked.length){document.getElementById('statEarliest').textContent='—';return;}
+  document.getElementById('statEarliest').textContent=formatTime([...booked].sort((a,b)=>a.time.localeCompare(b.time))[0].time);
+}
+
+function showToast(msg) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+// ── Tee Times modal ───────────────────────────────────────
+function showAllTeeTimes() {
+  const body=document.getElementById('teeTimesModalBody');
+  body.innerHTML=''; let anyTimes=false;
+  DAYS.forEach(day=>{
+    const groups=(state[day].groups||[]).filter(g=>g.time||(g.players&&g.players.length));
+    if (!groups.length) return; anyTimes=true;
+    const section=document.createElement('div'); section.className='modal-day-section';
+    section.innerHTML=`<div class="modal-day-heading">${day} <span style="font-size:.8em;opacity:.6;font-weight:400">${getDayDate(day)}</span></div>`;
+    [...groups].sort((a,b)=>(a.time||'').localeCompare(b.time||'')).forEach(g=>{
+      const row=document.createElement('div');
+      row.style.cssText='padding:8px 0;border-bottom:1px solid rgba(82,183,136,0.1);cursor:pointer';
+      row.onclick=()=>{closeTeeTimesModal();goToDay(day);};
+      const players=g.players||[];
+      row.innerHTML=`
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+          <span style="font-family:'Playfair Display',serif;font-size:clamp(0.9rem,2.2vw,1.05rem);font-weight:700;color:var(--sand)">${g.time?formatTime(g.time):'Time TBD'}</span>
+          <span style="font-size:clamp(0.6rem,1.4vw,0.7rem);color:var(--light-green);opacity:.7;letter-spacing:.06em">${g.holes||'18 Holes'}</span>
+          <span style="font-size:clamp(0.6rem,1.4vw,0.7rem);color:var(--pale-green);opacity:.6">${players.length} player${players.length!==1?'s':''}</span>
+        </div>
+        <div style="font-size:clamp(0.7rem,1.6vw,0.8rem);color:var(--cream);opacity:.75;margin-top:3px">${players.length?players.map(p=>p.name).join(', '):'No players yet'}</div>`;
+      section.appendChild(row);
+    });
+    body.appendChild(section);
+  });
+  if (!anyTimes) body.innerHTML='<div class="modal-empty">No tee times scheduled yet.</div>';
+  document.getElementById('teeTimesModal').classList.add('open');
+}
+function closeTeeTimesModal(){document.getElementById('teeTimesModal').classList.remove('open');}
+
+function goToDay(day) {
+  const card=document.getElementById('card-'+day); if(!card) return;
+  document.querySelectorAll('.day-card.open').forEach(c=>c.classList.remove('open'));
+  card.classList.add('open'); renderDay(day);
+  card.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ── Players modal ─────────────────────────────────────────
+function showAllPlayers() {
+  const body=document.getElementById('playersModalBody');
+  body.innerHTML=''; let anyPlayers=false;
+  DAYS.forEach(day=>{
+    const groups=(state[day].groups||[]).filter(g=>g.players&&g.players.length>0);
+    if (!groups.length) return; anyPlayers=true;
+    const section=document.createElement('div'); section.className='modal-day-section';
+    section.innerHTML=`<div class="modal-day-heading">${day}</div>`;
+    groups.forEach(g=>{
+      const timeEl=document.createElement('div'); timeEl.className='modal-group-time';
+      timeEl.textContent=`⛳ ${g.time?formatTime(g.time):'No time set'} · ${g.holes}`;
+      section.appendChild(timeEl);
+      g.players.forEach(p=>{
+        const tee=p.selectedTee?teeState.tees.find(t=>t.id===p.selectedTee):null;
+        const hcp=calcHcp(p.handicap,tee);
+        const row=document.createElement('div'); row.className='modal-player-row';
+        row.innerHTML=`
+          <span class="modal-player-dot" style="background:${tee?tee.color:'rgba(82,183,136,0.5)'}"></span>
+          <span class="modal-player-name">${p.name}</span>
+          ${p.handicap?`<span class="modal-player-hcp">HCP ${p.handicap}${hcp!==null?` → ${hcp}`:''}</span>`:''}
+          <span class="modal-player-transport">${p.transport==='ride'?'🛺':'🚶'}</span>`;
+        section.appendChild(row);
+      });
+    });
+    body.appendChild(section);
+  });
+  if (!anyPlayers) body.innerHTML='<div class="modal-empty">No players added yet.</div>';
+  document.getElementById('playersModal').classList.add('open');
+}
+function closePlayersModal(){document.getElementById('playersModal').classList.remove('open');}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePlayersModal();closeTeeTimesModal();qaClose();}});
+
+// ── Jump to earliest tee time ─────────────────────────────
+function goToEarliestTee() {
+  const booked=DAYS.flatMap(d=>(state[d].groups||[]).map(g=>({day:d,group:g}))).filter(x=>x.group.time).sort((a,b)=>a.group.time.localeCompare(b.group.time));
+  if (!booked.length){showToast('No tee times set yet.');return;}
+  const {day}=booked[0];
+  document.querySelectorAll('.day-card.open').forEach(c=>c.classList.remove('open'));
+  const card=document.getElementById('card-'+day);
+  card.classList.add('open'); renderDay(day);
+  card.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// ── Tee Setup ─────────────────────────────────────────────
+const TEE_COLORS=['#ffffff','#f0c520','#e74c3c','#3498db','#2ecc71','#9b59b6','#f39c12','#1abc9c'];
+let teeColorIdx=0;
+const teeState={tees:[],open:false};
+const _teeTimers={};
+
+function toggleTeeSetup() {
+  teeState.open=!teeState.open;
+  document.getElementById('teeSetupPanel').classList.toggle('open',teeState.open);
+  savePrefs();
+}
+
+async function addTee() {
+  const courseId=await ensureCourse(); if(!courseId) return;
+  const color=TEE_COLORS[teeColorIdx++%TEE_COLORS.length];
+  const tmp={id:uid(),apiId:null,name:'',color,rating:'',slope:'',par:72};
+  teeState.tees.push(tmp); renderTeeRows();
+  try {
+    const r=await apiFetch('POST','/tees',{course_id:courseId,name:'',color,par:72});
+    tmp.apiId=r.id; tmp.id=String(r.id);
+  } catch(e){console.error('addTee:',e);}
+}
+
+async function removeTee(id) {
+  const tee=teeState.tees.find(t=>t.id===id);
+  const apiId=tee&&tee.apiId;
+  teeState.tees=teeState.tees.filter(t=>t.id!==id);
+  renderTeeRows(); refreshAllChips();
+  if (apiId){try{await apiFetch('DELETE',`/tees/${apiId}`);}catch(e){console.error(e);}}
+}
+
+function updateTee(id, field, value) {
+  const t=teeState.tees.find(t=>t.id===id); if(!t) return;
+  t[field]=(field==='par'||field==='slope')?(value===''?'':Number(value)):value;
+  renderTeeSubtitle(); refreshAllChips();
+  clearTimeout(_teeTimers[id]);
+  _teeTimers[id]=setTimeout(()=>persistTeeUpdate(t),800);
+}
+
+async function persistTeeUpdate(t) {
+  if (!t.apiId) return;
+  const courseId=await ensureCourse(); if(!courseId) return;
+  try {
+    await apiFetch('DELETE',`/tees/${t.apiId}`);
+    const r=await apiFetch('POST','/tees',{
+      course_id:courseId, name:t.name||'', color:t.color||'#ffffff',
+      par:t.par!=null?t.par:72,
+      rating:t.rating!==''?parseFloat(t.rating):null,
+      slope: t.slope!==''?parseInt(t.slope):null,
+    });
+    t.apiId=r.id; t.id=String(r.id);
+  } catch(e){console.error('persistTeeUpdate:',e);}
+}
+
+function updateTeeColor(id, color) {
+  const t=teeState.tees.find(t=>t.id===id); if(!t) return;
+  t.color=color;
+  const sw=document.getElementById('sw-'+id); if(sw) sw.style.background=color;
+  renderTeeSubtitle(); refreshAllChips();
+  clearTimeout(_teeTimers[id]);
+  _teeTimers[id]=setTimeout(()=>persistTeeUpdate(t),800);
+}
+
+function flushTeeUpdate(id) {
+  if (!_teeTimers[id]) return;
+  clearTimeout(_teeTimers[id]);
+  delete _teeTimers[id];
+  const t=teeState.tees.find(t=>t.id===id); if(t) persistTeeUpdate(t);
+}
+
+function renderTeeRows() {
+  const c=document.getElementById('teeRows');
+  if (!teeState.tees.length){
+    c.innerHTML='<p style="font-size:.75rem;color:var(--light-green);opacity:.6;padding:4px 0">No tees yet — click "+ Add Tee"</p>';
+    renderTeeSubtitle(); return;
+  }
+  c.innerHTML='';
+  teeState.tees.forEach(t=>{
+    const row=document.createElement('div'); row.className='tee-row';
+    row.innerHTML=`
+      <div class="tee-color-swatch" id="sw-${t.id}" style="background:${t.color}">
+        <input type="color" value="${t.color}" oninput="updateTeeColor('${t.id}',this.value)" />
+      </div>
+      <div><span class="tee-field-label">Name</span>
+        <input class="tee-input" type="text" placeholder="e.g. Blue" value="${t.name}" oninput="updateTee('${t.id}','name',this.value)" onblur="flushTeeUpdate('${t.id}')" /></div>
+      <div class="tee-rating-slope">
+        <div><span class="tee-field-label">Rating</span>
+          <input class="tee-input" type="number" step="0.1" placeholder="71.2" value="${t.rating}" oninput="updateTee('${t.id}','rating',this.value)" onblur="flushTeeUpdate('${t.id}')" /></div>
+        <div><span class="tee-field-label">Slope</span>
+          <input class="tee-input" type="number" placeholder="113" value="${t.slope}" oninput="updateTee('${t.id}','slope',this.value)" onblur="flushTeeUpdate('${t.id}')" /></div>
+      </div>
+      <button class="btn-remove-tee" onclick="removeTee('${t.id}')">✕</button>`;
+    c.appendChild(row);
+  });
+  renderTeeSubtitle();
+}
+
+function renderTeeSubtitle() {
+  const named=teeState.tees.filter(t=>t.name.trim());
+  document.getElementById('teeSetupSub').textContent=named.length?named.map(t=>t.name).join(' · '):'Configure tees & ratings';
+}
+
+function refreshAllChips() {
+  DAYS.forEach(day=>{
+    if (document.getElementById('card-'+day).classList.contains('open'))
+      state[day].groups.forEach(g=>renderGroupChips(day,g));
+  });
+}
+
+// ── Expired player cleanup ────────────────────────────────
+function cleanupExpiredPlayers() {
+  const now=new Date(); const todayDay=DAYS[now.getDay()]; let changed=false;
+  DAYS.forEach(day=>{
+    (state[day].groups||[]).forEach(g=>{
+      if (!g.time||!g.players||!g.players.length||day!==todayDay) return;
+      const [h,m]=g.time.split(':').map(Number);
+      const expires=new Date(now.getFullYear(),now.getMonth(),now.getDate(),h,m,0).getTime()+8*3600000;
+      if (Date.now()>=expires){g.players=[];changed=true;}
+    });
+  });
+  if (changed){DAYS.forEach(d=>{updateCardBadge(d);const c=document.getElementById('card-'+d);if(c&&c.classList.contains('open'))renderDay(d);});updateStats();}
+}
+
+// ── Quick-Add Modal ───────────────────────────────────────
+let _qaDay=null,_qaSel=[],_qaNew=[];
+
+function addTeeTimeForDay(day){_qaDay=day;_qaSel=[];_qaNew=[];document.getElementById('qaTitle').textContent=`Add Tee Time — ${day}`;qaRender();document.getElementById('qaModal').classList.add('open');}
+
+function qaRender() {
+  const body=document.getElementById('qaBody');
+  const roster=playerRoster.filter(p=>p.name);
+  const selSet=new Set([..._qaSel,..._qaNew]);
+  const count=selSet.size,isFull=count>=4;
+  const rosterHtml=roster.map(p=>{
+    const isSel=selSet.has(p.name);
+    const hcp=p.handicap?` <span style="opacity:.5;font-size:.85em">(${p.handicap})</span>`:'';
+    return `<button class="qa-player-btn ${isSel?'sel':(isFull?'maxed':'')}" onclick="qaToggle('${p.name.replace(/'/g,"\\'")}')">
+      ${isSel?'✓ ':''}${p.name}${hcp}</button>`;
+  }).join('');
+  const newHtml=_qaNew.map((n,i)=>`<button class="qa-player-btn sel" onclick="qaRemoveNew(${i})">✓ ${n} ✕</button>`).join('');
+  body.innerHTML=`
+    <div class="qa-section"><div class="qa-row">
+      <div><div class="qa-label">Tee Time</div>
+        <input type="time" id="qaTime" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(82,183,136,0.25);border-radius:3px;color:var(--cream);font-family:'Courier Prime',monospace;font-size:max(16px,0.9rem);padding:8px 10px;outline:none" /></div>
+      <div><div class="qa-label">Holes</div>
+        <select id="qaHoles" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(82,183,136,0.25);border-radius:3px;color:var(--cream);font-family:'Courier Prime',monospace;font-size:max(16px,0.9rem);padding:8px 10px;outline:none">
+          ${HOLES.map(h=>`<option>${h}</option>`).join('')}
+        </select></div>
+    </div></div>
+    <div class="qa-section">
+      <div class="qa-label">Players ${count>0?`<span class="qa-count">${count}/4</span>`:''}</div>
+      ${(roster.length>0||_qaNew.length>0)?`<div class="qa-player-grid">${rosterHtml}${newHtml}</div>`:''}
+      ${!isFull?`<div class="qa-add-row">
+        <input type="text" id="qaNewName" placeholder="Type a player name…" onkeydown="if(event.key==='Enter')qaAddNew()" style="font-size:max(16px,0.85rem)!important;padding:7px 10px!important" />
+        <button class="qa-add-btn" onclick="qaAddNew()">+ Add</button>
+      </div>`:`<p style="font-size:.72rem;color:var(--sand);margin-top:6px;font-style:italic">Group full (4/4)</p>`}
+    </div>`;
+}
+
+function qaToggle(name){const idx=_qaSel.indexOf(name);if(idx>=0)_qaSel.splice(idx,1);else if(_qaSel.length+_qaNew.length<4)_qaSel.push(name);else{showToast('Max 4 players per tee time');return;}qaRender();}
+function qaAddNew(){const input=document.getElementById('qaNewName');const name=input?input.value.trim():'';if(!name)return;if(_qaSel.includes(name)||_qaNew.includes(name)){showToast('Already added');return;}if(_qaSel.length+_qaNew.length>=4){showToast('Max 4 players');return;}_qaNew.push(name);qaRender();}
+function qaRemoveNew(i){_qaNew.splice(i,1);qaRender();}
+
+async function qaSave() {
+  const day=_qaDay;
+  const time =(document.getElementById('qaTime') ||{}).value||'';
+  const holes=(document.getElementById('qaHoles')||{}).value||'18 Holes';
+  if (!day) return;
+
+  const players=[];
+  for (const name of _qaSel) {
+    const entry=playerRoster.find(r=>r.name===name);
+    players.push({name,transport:'walk',handicap:entry?(entry.handicap||''):'',selectedTee:null,apiId:entry?entry.apiId:null});
+  }
+  for (const name of _qaNew) {
+    let apiId=null;
+    try{const r=await apiFetch('POST','/players',{name});apiId=r.id;playerRoster.push({apiId,name,handicap:''});}
+    catch(e){console.error('qaSave player:',e);}
+    players.push({name,transport:'walk',handicap:'',selectedTee:null,apiId});
+  }
+
+  const group=newGroup(); group.time=time; group.holes=holes; group.players=players;
+  state[day].groups.push(group);
+
+  try {
+    const courseId=await ensureCourse();
+    const result=await apiFetch('POST','/tee-times',{course_id:courseId,tee_time:dayTimeToISO(day,time),max_players:4,notes:packNotes(holes,'')});
+    group.apiId=result.id; group.id='api_'+result.id;
+    for (const p of players) {
+      if (p.apiId){try{await apiFetch('POST',`/tee-times/${result.id}/players`,{player_id:p.apiId});}catch(e){console.error(e);}}
+    }
+  } catch(e){showToast('⚠ Failed to save tee time');console.error(e);}
+
+  updateCardBadge(day); updateStats(); qaClose();
+  const card=document.getElementById('card-'+day); card.style.display='';
+  document.querySelectorAll('.day-card.open').forEach(c=>c.classList.remove('open'));
+  card.classList.add('open'); renderDay(day);
+  card.scrollIntoView({behavior:'smooth',block:'start'});
+  showToast(`✓ Tee time added for ${day}`);
+}
+
+function qaClose(){document.getElementById('qaModal').classList.remove('open');_qaDay=null;_qaSel=[];_qaNew=[];}
+
+// ── Make Teams ────────────────────────────────────────────
+const TEAM_COLORS=['#3498db','#e74c3c','#2ecc71','#9b59b6','#f39c12','#1abc9c','#e91e8c','#f0c520'];
+const TEAM_NAMES =['Team A','Team B','Team C','Team D','Team E','Team F'];
+
+function makeTeams(day,teamSize,randomMode){
+  const container=document.getElementById('teams-'+day);
+  const allPlayers=[];
+  (state[day].groups||[]).forEach(g=>(g.players||[]).forEach(p=>{
+    const tee=p.selectedTee?teeState.tees.find(t=>t.id===p.selectedTee):null;
+    const hcp=calcHcp(p.handicap,tee);
+    allPlayers.push({name:p.name,handicap:p.handicap,playingHcp:hcp,teeColor:tee?tee.color:null,
+      sortHcp:hcp!==null?hcp:(p.handicap!==''&&p.handicap!=null?parseFloat(p.handicap):999)});
+  }));
+  if (allPlayers.length<2){showToast('Need at least 2 players to make teams.');return;}
+  if (!teamSize){showTeamSizePicker(day,allPlayers.length,container);return;}
+  renderTeams(day,randomMode?buildRandomTeams(allPlayers,teamSize):buildBalancedTeams(allPlayers,teamSize),container,allPlayers.length,teamSize,randomMode);
+}
+
+function showTeamSizePicker(day,playerCount,container){
+  const btnHtml=[2,3,4].map(s=>{
+    const n=Math.ceil(playerCount/s);
+    return `<button class="btn-team-size${playerCount<s?' disabled-size':''}" onclick="makeTeams('${day}',${s})">${s} players<br><span style="font-size:.7em;opacity:.6">${n} team${n!==1?'s':''}</span></button>`;
+  }).join('');
+  container.innerHTML=`<div class="team-size-picker">
+    <div class="team-size-label">⚔ Team Size</div>
+    <div class="team-size-hint">${playerCount} player${playerCount!==1?'s':''} · choose how many per team</div>
+    <div class="team-size-btns">${btnHtml}</div>
+    <button class="btn-cancel-teams" onclick="document.getElementById('teams-${day}').innerHTML=''">✕ Cancel</button>
+  </div>`;
+}
+
+function buildBalancedTeams(players,teamSize){
+  const sorted=[...players].sort((a,b)=>a.sortHcp-b.sortHcp);
+  let i=0;while(i<sorted.length){let j=i;while(j<sorted.length&&sorted[j].sortHcp===sorted[i].sortHcp)j++;for(let k=j-1;k>i;k--){const r=i+Math.floor(Math.random()*(k-i+1));[sorted[k],sorted[r]]=[sorted[r],sorted[k]];}i=j;}
+  const numTeams=Math.ceil(players.length/teamSize);
+  const teams=Array.from({length:numTeams},(_,i)=>({name:TEAM_NAMES[i]||`Team ${i+1}`,players:[],color:TEAM_COLORS[i%TEAM_COLORS.length]}));
+  let dir=1,idx=0;
+  sorted.forEach(p=>{teams[idx].players.push(p);idx+=dir;if(idx>=numTeams){idx=numTeams-1;dir=-1;}else if(idx<0){idx=0;dir=1;}});
+  if (numTeams>=2){for(let t=0;t<5;t++){const ti=Math.floor(Math.random()*numTeams),tj=(ti+1+Math.floor(Math.random()*(numTeams-1)))%numTeams;const ai=Math.floor(Math.random()*teams[ti].players.length),bi=Math.floor(Math.random()*teams[tj].players.length);const pa=teams[ti].players[ai],pb=teams[tj].players[bi];const before=Math.abs(teams[ti].players.reduce((s,p)=>s+p.sortHcp,0)-teams[tj].players.reduce((s,p)=>s+p.sortHcp,0));[teams[ti].players[ai],teams[tj].players[bi]]=[pb,pa];const after=Math.abs(teams[ti].players.reduce((s,p)=>s+p.sortHcp,0)-teams[tj].players.reduce((s,p)=>s+p.sortHcp,0));if(after>before+2)[teams[ti].players[ai],teams[tj].players[bi]]=[pa,pb];}}
+  return teams;
+}
+
+function buildRandomTeams(players,teamSize){
+  const s=[...players];for(let i=s.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[s[i],s[j]]=[s[j],s[i]];}
+  const n=Math.ceil(players.length/teamSize);
+  const teams=Array.from({length:n},(_,i)=>({name:TEAM_NAMES[i]||`Team ${i+1}`,players:[],color:TEAM_COLORS[i%TEAM_COLORS.length]}));
+  s.forEach((p,i)=>teams[i%n].players.push(p));return teams;
+}
+
+function renderTeams(day,teams,container,totalPlayers,teamSize,randomMode){
+  const knownHcp=teams.flatMap(t=>t.players).filter(p=>p.playingHcp!==null).length;
+  const method=randomMode?'Random draw — handicaps not considered':knownHcp===totalPlayers?'Balanced by playing handicap':knownHcp>0?'Balanced by available handicaps (some players missing index/tee)':'Random — add handicap indexes & select tees for handicap-based teams';
+  const teamCardsHtml=teams.map(team=>{
+    const hasAllHcp=team.players.every(p=>p.playingHcp!==null);
+    const teamTotal=team.players.reduce((s,p)=>s+(p.playingHcp!==null?p.playingHcp:0),0);
+    return `<div class="team-card" style="border-left-color:${team.color}">
+      <div class="team-name" style="color:${team.color}">${team.name}</div>
+      ${team.players.map(p=>`<div class="team-player">
+        <span class="team-player-dot" style="${p.teeColor?`background:${p.teeColor}`:'background:rgba(82,183,136,0.5)'}"></span>
+        <span class="team-player-name">${p.name}</span>
+        <span class="team-player-hcp">${p.playingHcp!==null?`HCP ${p.playingHcp}`:p.handicap?`Idx ${p.handicap}`:'—'}</span>
+      </div>`).join('')}
+      ${hasAllHcp?`<div class="team-total">Combined HCP: ${teamTotal}</div>`:''}
+    </div>`;
+  }).join('');
+  container.innerHTML=`<div class="teams-panel">
+    <div class="teams-panel-header">
+      <span class="teams-panel-title">⚔ Teams for ${day}</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},false)">↺ HCP</button>
+        <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},true)">🎲 Random</button>
+        <button class="btn-reshuffle" onclick="makeTeams('${day}')">⊞ Size</button>
+        <button class="btn-close-teams" onclick="document.getElementById('teams-${day}').innerHTML=''">✕</button>
+      </div>
+    </div>
+    <div class="teams-grid">${teamCardsHtml}</div>
+    <div class="teams-method">${method}</div>
+  </div>`;
+}
+
+// ── Init ──────────────────────────────────────────────────
+async function init() {
+  // Remove pre-rendered static cards from saved HTML (would create duplicate IDs)
+  const wc = document.getElementById('weekContainer');
+  const noTeesMsg = document.getElementById('noTeesMsg');
+  wc.innerHTML = '';
+  wc.appendChild(noTeesMsg);
+
+  DAYS.forEach((day,i) => buildCard(day,i));
+
+  await loadAll();
+
+  DAYS.forEach(day => updateCardBadge(day));
+  updateStats();
+  renderTeeRows();
+  if (teeState.open) document.getElementById('teeSetupPanel').classList.add('open');
+
+  const noTeesDays = document.getElementById('noTeesDays');
+  noTeesDays.innerHTML = '';
+  DAYS.forEach(day => {
+    const btn = document.createElement('button');
+    btn.className = 'btn-day-pick';
+    btn.textContent = day;
+    btn.onclick = () => addTeeTimeForDay(day);
+    noTeesDays.appendChild(btn);
+  });
+
+  async function saveCourseNameNow() {
+    const name = document.getElementById('courseName').value.trim();
+    if (!name) return;
+    if (currentCourseId) {
+      try { await apiFetch('PUT', `/courses/${currentCourseId}`, { name }); } catch(e) { console.error('saveCourse:', e); }
+    } else {
+      try { const c = await apiFetch('POST', '/courses', { name }); currentCourseId = c.id; } catch(e) { console.error('createCourse:', e); }
+    }
+  }
+  document.getElementById('courseName').addEventListener('blur',   saveCourseNameNow);
+  document.getElementById('courseName').addEventListener('change', saveCourseNameNow);
+
+  // Flush pending tee debounce saves before page unloads
+  window.addEventListener('beforeunload', () => {
+    Object.keys(_teeTimers).forEach(id => {
+      clearTimeout(_teeTimers[id]);
+      const t = teeState.tees.find(t => t.id === id || String(t.apiId) === id);
+      if (t) persistTeeUpdate(t);
+    });
+  });
+
+  setInterval(syncFromAPI, 30000);
+  cleanupExpiredPlayers();
+  setInterval(cleanupExpiredPlayers, 60000);
+}
+
+init();
+</script>
