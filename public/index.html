@@ -629,6 +629,7 @@ function openDateCard(dateStr) {
         <div class="day-form-footer">
           <button class="btn-add-group" onclick="addGroup('${dateStr}')">+ Add Tee Time</button>
           <button class="btn-make-teams" onclick="makeTeams('${dateStr}')">⚔ Make Teams</button>
+          ${isAdmin()?`<button class="btn-remove-group" style="margin-left:auto" onclick="removeDatePlay('${dateStr}')">✕ Remove Date</button>`:''}
         </div>
         <div id="teams-${dateStr}"></div>
       </div>`;
@@ -842,6 +843,26 @@ async function removeGroup(day, gid) {
   if (apiId) {
     try { await apiFetch('DELETE', `/tee-times/${apiId}`); } catch(e) { console.error(e); }
   }
+}
+
+async function removeDatePlay(dateStr) {
+  const d = new Date(dateStr+'T12:00:00');
+  const label = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  if (!confirm(`Remove all tee times for ${label}? This cannot be undone.`)) return;
+  const groups = (state[dateStr]&&state[dateStr].groups)||[];
+  // Delete each tee time from the API
+  await Promise.all(groups.filter(g=>g.apiId).map(g =>
+    apiFetch('DELETE',`/tee-times/${g.apiId}`).catch(e=>console.error(e))
+  ));
+  // Clear state and remove the card
+  delete state[dateStr];
+  const card = document.getElementById('card-'+dateStr);
+  if (card) card.remove();
+  const sep = document.getElementById('calSep');
+  if (sep && !document.querySelector('#calDayCards .day-card')) sep.style.display='none';
+  selectedDate = null;
+  renderCalendar();
+  updateStats();
 }
 
 async function saveTeeTime(g, day) {
