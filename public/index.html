@@ -474,6 +474,8 @@ function applyAdminUI() {
   document.getElementById('teeSetupPanel').style.display = d(admin);
   // player add rows: show name inputs only for admin
   document.querySelectorAll('.add-player-name-row').forEach(el => el.style.display = d(admin));
+  // admin-only elements (e.g. remove date button)
+  document.querySelectorAll('.admin-only').forEach(el => el.style.display = d(admin));
 }
 
 async function apiFetch(method, path, body) {
@@ -629,7 +631,7 @@ function openDateCard(dateStr) {
         <div class="day-form-footer">
           <button class="btn-add-group" onclick="addGroup('${dateStr}')">+ Add Tee Time</button>
           <button class="btn-make-teams" onclick="makeTeams('${dateStr}')">⚔ Make Teams</button>
-          ${isAdmin()?`<button class="btn-remove-group" style="margin-left:auto" onclick="removeDatePlay('${dateStr}')">✕ Remove Date</button>`:''}
+          <button class="btn-remove-group admin-only" style="margin-left:auto;display:${isAdmin()?'':'none'}" onclick="removeDatePlay('${dateStr}')">✕ Remove Date</button>
         </div>
         <div id="teams-${dateStr}"></div>
       </div>`;
