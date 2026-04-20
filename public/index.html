@@ -813,6 +813,8 @@ async function addGroup(day) {
     });
     g.apiId = result.id;
     g.id    = 'api_' + result.id;
+    // Flush any time/holes/notes changes the user made while the POST was in-flight
+    if (g.time || g.notes) saveTeeTime(g, day).catch(e => console.error(e));
   } catch(e) { showToast('⚠ Failed to save tee time'); console.error(e); }
 }
 
