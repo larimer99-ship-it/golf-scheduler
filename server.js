@@ -124,7 +124,7 @@ app.get('/api/courses', async (req, res) => {
   }
 });
 
-app.post('/api/courses', async (req, res) => {
+app.post('/api/courses', requireAuth, async (req, res) => {
   const { name, address, phone, holes } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
   try {
@@ -138,7 +138,7 @@ app.post('/api/courses', async (req, res) => {
   }
 });
 
-app.put('/api/courses/:id', async (req, res) => {
+app.put('/api/courses/:id', requireAuth, async (req, res) => {
   const { name, address, phone, holes } = req.body;
   try {
     const { rows } = await pool.query(
@@ -171,7 +171,7 @@ app.get('/api/tees', async (req, res) => {
   }
 });
 
-app.post('/api/tees', async (req, res) => {
+app.post('/api/tees', requireAuth, async (req, res) => {
   const { course_id, name, color, par, yardage, rating, slope } = req.body;
   if (!course_id) return res.status(400).json({ error: 'course_id is required' });
   try {
@@ -186,7 +186,7 @@ app.post('/api/tees', async (req, res) => {
   }
 });
 
-app.put('/api/tees/:id', async (req, res) => {
+app.put('/api/tees/:id', requireAuth, async (req, res) => {
   const { name, color, par, yardage, rating, slope } = req.body;
   try {
     const { rows } = await pool.query(
@@ -207,7 +207,7 @@ app.put('/api/tees/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/tees/:id', async (req, res) => {
+app.delete('/api/tees/:id', requireAuth, async (req, res) => {
   try {
     const { rowCount } = await pool.query('DELETE FROM tees WHERE id = $1', [req.params.id]);
     if (!rowCount) return res.status(404).json({ error: 'Tee not found' });

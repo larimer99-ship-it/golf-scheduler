@@ -338,14 +338,14 @@
   <p>Set your rounds for the week</p>
 </div>
 
-<div class="course-row">
+<div class="course-row" id="courseRow" style="display:none">
   <div class="course-input-wrap">
     <span class="course-icon">🏌️</span>
     <input type="text" id="courseName" placeholder="Enter course name…">
   </div>
 </div>
 
-<div class="tee-setup-panel" id="teeSetupPanel">
+<div class="tee-setup-panel" id="teeSetupPanel" style="display:none">
   <div class="tee-setup-toggle" onclick="toggleTeeSetup()">
     <span style="font-size:1.2rem;flex-shrink:0">⛳</span>
     <span class="tee-setup-toggle-label">Course Tees</span>
@@ -553,6 +553,16 @@ function uid() { return 'u' + Date.now() + '_' + (++_uidN); }
 
 // ── API ───────────────────────────────────────────────────
 function getToken() { return localStorage.getItem('authToken'); }
+function isAdmin() { return !!getToken(); }
+
+function applyAdminUI() {
+  const admin = isAdmin();
+  const d = v => v ? '' : 'none';
+  document.getElementById('courseRow').style.display     = d(admin);
+  document.getElementById('teeSetupPanel').style.display = d(admin);
+  // player add rows: show name inputs only for admin
+  document.querySelectorAll('.add-player-name-row').forEach(el => el.style.display = d(admin));
+}
 
 async function apiFetch(method, path, body) {
   const opts = { method, headers: {'Content-Type':'application/json'} };
@@ -586,6 +596,7 @@ async function doLogin() {
     const { token } = await r.json();
     localStorage.setItem('authToken', token);
     hideLoginModal();
+    applyAdminUI();
     if (_adminResolve) { _adminResolve(true); _adminResolve = null; }
   } catch(e) { errEl.textContent = 'Could not reach server.'; }
 }
@@ -601,6 +612,12 @@ async function doLogout() {
     await fetch(API + '/logout', opts);
   } catch(e) {}
   localStorage.removeItem('authToken');
+  applyAdminUI();
+  // re-render open day cards to hide name inputs
+  DAYS.forEach(day => {
+    const card = document.getElementById('card-'+day);
+    if (card && card.classList.contains('open')) renderDay(day);
+  });
 }
 
 function showLoginModal() {
@@ -843,6 +860,26 @@ async function addGroup(day) {
   } catch(e) { showToast('⚠ Failed to save tee time'); console.error(e); }
 }
 
+async function autoAddNextGroup(day, sourceGroup) {
+  if (!sourceGroup.time) return;
+  const [h, m] = sourceGroup.time.split(':').map(Number);
+  const total = h * 60 + m + 10;
+  const newTime = `${String(Math.floor(total/60)%24).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`;
+  if (state[day].groups.some(g => g.time === newTime)) return;
+  const g = newGroup(); g.time = newTime; g.holes = '18 Holes';
+  state[day].groups.push(g);
+  renderDay(day); updateCardBadge(day); updateStats();
+  try {
+    const courseId = await ensureCourse(); if (!courseId) return;
+    const result = await apiFetch('POST', '/tee-times', {
+      course_id: courseId, tee_time: dayTimeToISO(day, newTime),
+      max_players: 4, notes: packNotes('18 Holes', ''),
+    });
+    g.apiId = result.id; g.id = 'api_' + result.id;
+    renderDay(day);
+  } catch(e) { console.error('autoAddNextGroup:', e); }
+}
+
 async function removeGroup(day, gid) {
   if (!confirm('Remove this tee time group?')) return;
   const g = state[day].groups.find(x => x.id === gid);
@@ -911,7 +948,7 @@ function renderGroup(day, g, gi, container) {
         <label>Players</label>
         <div class="players-row" id="gc-${g.id}"></div>
         <div class="add-player-row" id="ga-${g.id}" style="${pCount>=4?'display:none':''}">
-          <div class="add-player-name-row">
+          <div class="add-player-name-row" style="${isAdmin()?'':'display:none'}">
             <input type="text" id="gfirst-${g.id}" placeholder="First name" />
             <input type="text" id="glast-${g.id}"  placeholder="Last name" />
             <button class="btn-add-player" onclick="addPlayer('${day}','${g.id}')">+ Add</button>
@@ -1056,6 +1093,7 @@ async function addPlayer(day, gid, nameOverride) {
   const li=document.getElementById('glast-' +gid); if(li) li.value='';
   renderGroupChips(day,g); renderGroupRoster(day,g);
   updateCardBadge(day); updateStats(); refreshAddBtn(day);
+  if ((g.players||[]).length >= 4) autoAddNextGroup(day, g);
 }
 
 async function removePlayer(day, gid, idx) {
@@ -1629,6 +1667,7 @@ async function init() {
   setInterval(cleanupExpiredPlayers, 60000);
 }
 
+applyAdminUI();
 init();
 
 // Allow Enter key on login form
