@@ -1040,7 +1040,8 @@ async function addPlayer(day, gid, nameOverride) {
     name = [first.trim(),last.trim()].filter(Boolean).join(' ');
   }
   if (!name) { showToast('Enter a first name at minimum.'); return; }
-  if ((g.players||[]).some(p=>p.name===name)) { showToast('Player already in this group!'); return; }
+  const allOnDate = (state[day]&&state[day].groups||[]).flatMap(gr=>gr.players||[]);
+  if (allOnDate.some(p=>p.name===name)) { showToast(`${name} is already scheduled on this date.`); return; }
 
   let rosterEntry = playerRoster.find(p=>p.name===name);
   const playerObj = { name, transport:'walk', handicap: rosterEntry?(rosterEntry.handicap||''):'', selectedTee:null, apiId: rosterEntry?rosterEntry.apiId:null };
@@ -1439,11 +1440,13 @@ function qaRender() {
   const roster=playerRoster.filter(p=>p.name);
   const selSet=new Set([..._qaSel,..._qaNew]);
   const count=selSet.size,isFull=count>=4;
+  const alreadyOnDate=new Set((state[_qaDay]&&state[_qaDay].groups||[]).flatMap(gr=>gr.players||[]).map(p=>p.name));
   const rosterHtml=roster.map(p=>{
     const isSel=selSet.has(p.name);
+    const isBooked=!isSel&&alreadyOnDate.has(p.name);
     const hcp=p.handicap?` <span style="opacity:.5;font-size:.85em">(${p.handicap})</span>`:'';
-    return `<button class="qa-player-btn ${isSel?'sel':(isFull?'maxed':'')}" onclick="qaToggle('${p.name.replace(/'/g,"\\'")}')">
-      ${isSel?'✓ ':''}${p.name}${hcp}</button>`;
+    return `<button class="qa-player-btn ${isSel?'sel':((isFull||isBooked)?'maxed':'')}" onclick="qaToggle('${p.name.replace(/'/g,"\\'")}')">
+      ${isSel?'✓ ':''}${p.name}${hcp}${isBooked?' <span style="opacity:.5;font-size:.8em">scheduled</span>':''}</button>`;
   }).join('');
   const newHtml=_qaNew.map((n,i)=>`<button class="qa-player-btn sel" onclick="qaRemoveNew(${i})">✓ ${n} ✕</button>`).join('');
   body.innerHTML=`
@@ -1465,7 +1468,17 @@ function qaRender() {
     </div>`;
 }
 
-function qaToggle(name){const idx=_qaSel.indexOf(name);if(idx>=0)_qaSel.splice(idx,1);else if(_qaSel.length+_qaNew.length<4)_qaSel.push(name);else{showToast('Max 4 players per tee time');return;}qaRender();}
+function qaToggle(name){
+  const idx=_qaSel.indexOf(name);
+  if(idx>=0){_qaSel.splice(idx,1);}
+  else{
+    const alreadyOnDate=(state[_qaDay]&&state[_qaDay].groups||[]).flatMap(gr=>gr.players||[]).some(p=>p.name===name);
+    if(alreadyOnDate){showToast(`${name} is already scheduled on this date.`);return;}
+    if(_qaSel.length+_qaNew.length>=4){showToast('Max 4 players per tee time');return;}
+    _qaSel.push(name);
+  }
+  qaRender();
+}
 function qaAddNew(){const input=document.getElementById('qaNewName');const name=input?input.value.trim():'';if(!name)return;if(_qaSel.includes(name)||_qaNew.includes(name)){showToast('Already added');return;}if(_qaSel.length+_qaNew.length>=4){showToast('Max 4 players');return;}_qaNew.push(name);qaRender();}
 function qaRemoveNew(i){_qaNew.splice(i,1);qaRender();}
 
