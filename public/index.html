@@ -592,7 +592,23 @@ function renderCalendar() {
 function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
 function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
 
-function openCalPopup() { renderCalendar(); document.getElementById('calPopupOverlay').style.display='flex'; }
+function playersWithoutTee() {
+  if (!teeState.tees.length || !selectedDate) return [];
+  return (state[selectedDate]&&state[selectedDate].groups||[])
+    .flatMap(g=>g.players||[])
+    .filter(p=>!p.selectedTee)
+    .map(p=>p.name);
+}
+
+function openCalPopup() {
+  const missing = playersWithoutTee();
+  if (missing.length) {
+    const names = missing.join(', ');
+    if (!confirm(`${names} ${missing.length===1?'has':'have'} not chosen a tee.\n\nChoose a tee for ${missing.length===1?'them':'each player'} before changing dates, or click OK to continue anyway.`)) return;
+  }
+  renderCalendar();
+  document.getElementById('calPopupOverlay').style.display='flex';
+}
 function closeCalPopup() { document.getElementById('calPopupOverlay').style.display='none'; }
 
 function selectCalDate(dateStr) {
@@ -1073,6 +1089,7 @@ async function addPlayer(day, gid, nameOverride) {
   renderGroupChips(day,g); renderGroupRoster(day,g);
   updateCardBadge(day); updateStats(); refreshAddBtn(day);
   if ((g.players||[]).length >= 4) autoAddNextGroup(day, g);
+  if (teeState.tees.length && !playerObj.selectedTee) showToast(`Select a tee for ${name} to calculate playing handicap`);
 }
 
 async function removePlayer(day, gid, idx) {
