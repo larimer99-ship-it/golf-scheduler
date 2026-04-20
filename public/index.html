@@ -296,6 +296,23 @@
     .day-header { padding: 8px 14px; gap: 5px; }
     .tee-group-body { padding: 8px 12px; gap: 8px; }
   }
+  /* Calendar */
+  .calendar-widget { max-width:min(960px,100%); margin:0 auto clamp(8px,2vw,16px); padding:0 var(--pad); }
+  .calendar-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .cal-nav-btn { background:none; border:1px solid rgba(82,183,136,0.3); border-radius:4px; color:var(--pale-green); cursor:pointer; font-size:1.1rem; padding:4px 12px; transition:background 0.15s; }
+  .cal-nav-btn:hover { background:rgba(82,183,136,0.12); }
+  .cal-title { font-family:'Playfair Display',serif; font-size:clamp(0.9rem,2.5vw,1.1rem); color:var(--white); font-weight:700; letter-spacing:0.03em; }
+  .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+  .cal-hdr { font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--light-green); opacity:0.7; text-align:center; padding:4px 0 6px; }
+  .cal-cell { aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; font-size:clamp(0.75rem,1.8vw,0.88rem); color:var(--cream); position:relative; transition:background 0.15s; user-select:none; }
+  .cal-cell:hover { background:rgba(82,183,136,0.15); }
+  .cal-empty { cursor:default; }
+  .cal-empty:hover { background:none; }
+  .cal-today { border:1px solid rgba(82,183,136,0.5); color:var(--pale-green); }
+  .cal-sel { background:var(--green)!important; color:var(--white)!important; font-weight:700; }
+  .cal-has .cal-dot { width:5px; height:5px; border-radius:50%; background:var(--sand); position:absolute; bottom:3px; }
+  .cal-sep { max-width:min(960px,100%); margin:clamp(8px,2vw,16px) auto; padding:0 var(--pad); border-top:1px solid rgba(82,183,136,0.15); }
+
   /* Admin bar */
   .header-flag { cursor:pointer; }
   /* Login overlay */
@@ -412,139 +429,21 @@
   </div>
 </div>
 
-<div class="week-container" id="weekContainer">
-  <div id="noTeesMsg" class="no-tees-msg" style="">
-    <span class="no-tees-icon">⛳</span>
-    <p>No tee times scheduled yet.</p>
-    <p class="no-tees-sub">Tap a day to get started</p>
-    <div class="no-tees-days" id="noTeesDays"><button class="btn-day-pick">Sunday</button><button class="btn-day-pick">Monday</button><button class="btn-day-pick">Tuesday</button><button class="btn-day-pick">Wednesday</button><button class="btn-day-pick">Thursday</button><button class="btn-day-pick">Friday</button><button class="btn-day-pick">Saturday</button></div>
+<div class="calendar-widget">
+  <div class="calendar-nav">
+    <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+    <span class="cal-title" id="calendarTitle"></span>
+    <button class="cal-nav-btn" onclick="calNext()">›</button>
   </div>
-<div class="day-card" id="card-Sunday" style="display: none;">
-    <div class="day-header" onclick="toggleCard(&#39;Sunday&#39;)">
-      <div class="day-header-top">
-        <div class="day-name">Sunday<span class="day-abbr">SUN</span><span class="day-date">Apr 12</span></div>
-        <div style="flex:1"></div>
-        <span class="players-summary" id="psum-Sunday"></span>
-        <span class="toggle-icon">▾</span>
-      </div>
-      <div class="day-summary" id="summary-Sunday"></div>
-    </div>
-    <div class="day-form" id="form-Sunday">
-      <div class="tee-groups" id="groups-Sunday"></div>
-      <div class="day-form-footer">
-        <button class="btn-add-group" onclick="addGroup(&#39;Sunday&#39;)">+ Add Tee Time</button>
-        <button class="btn-make-teams" onclick="makeTeams(&#39;Sunday&#39;)">⚔ Make Teams</button>
-      </div>
-      <div id="teams-Sunday"></div>
-    </div></div><div class="day-card" id="card-Monday" style="display: none;">
-    <div class="day-header" onclick="toggleCard(&#39;Monday&#39;)">
-      <div class="day-header-top">
-        <div class="day-name">Monday<span class="day-abbr">MON</span><span class="day-date">Apr 13</span></div>
-        <div style="flex:1"></div>
-        <span class="players-summary" id="psum-Monday"></span>
-        <span class="toggle-icon">▾</span>
-      </div>
-      <div class="day-summary" id="summary-Monday"></div>
-    </div>
-    <div class="day-form" id="form-Monday">
-      <div class="tee-groups" id="groups-Monday"></div>
-      <div class="day-form-footer">
-        <button class="btn-add-group" onclick="addGroup(&#39;Monday&#39;)">+ Add Tee Time</button>
-        <button class="btn-make-teams" onclick="makeTeams(&#39;Monday&#39;)">⚔ Make Teams</button>
-      </div>
-      <div id="teams-Monday"></div>
-    </div></div><div class="day-card" id="card-Tuesday" style="display: none;">
-    <div class="day-header" onclick="toggleCard(&#39;Tuesday&#39;)">
-      <div class="day-header-top">
-        <div class="day-name">Tuesday<span class="day-abbr">TUE</span><span class="day-date">Apr 14</span></div>
-        <div style="flex:1"></div>
-        <span class="players-summary" id="psum-Tuesday"></span>
-        <span class="toggle-icon">▾</span>
-      </div>
-      <div class="day-summary" id="summary-Tuesday"></div>
-    </div>
-    <div class="day-form" id="form-Tuesday">
-      <div class="tee-groups" id="groups-Tuesday"></div>
-      <div class="day-form-footer">
-        <button class="btn-add-group" onclick="addGroup(&#39;Tuesday&#39;)">+ Add Tee Time</button>
-        <button class="btn-make-teams" onclick="makeTeams(&#39;Tuesday&#39;)">⚔ Make Teams</button>
-      </div>
-      <div id="teams-Tuesday"></div>
-    </div></div><div class="day-card" id="card-Wednesday" style="display: none;">
-    <div class="day-header" onclick="toggleCard(&#39;Wednesday&#39;)">
-      <div class="day-header-top">
-        <div class="day-name">Wednesday<span class="day-abbr">WED</span><span class="day-date">Apr 15</span></div>
-        <div style="flex:1"></div>
-        <span class="players-summary" id="psum-Wednesday"></span>
-        <span class="toggle-icon">▾</span>
-      </div>
-      <div class="day-summary" id="summary-Wednesday"></div>
-    </div>
-    <div class="day-form" id="form-Wednesday">
-      <div class="tee-groups" id="groups-Wednesday"></div>
-      <div class="day-form-footer">
-        <button class="btn-add-group" onclick="addGroup(&#39;Wednesday&#39;)">+ Add Tee Time</button>
-        <button class="btn-make-teams" onclick="makeTeams(&#39;Wednesday&#39;)">⚔ Make Teams</button>
-      </div>
-      <div id="teams-Wednesday"></div>
-    </div></div><div class="day-card" id="card-Thursday" style="display: none;">
-    <div class="day-header" onclick="toggleCard(&#39;Thursday&#39;)">
-      <div class="day-header-top">
-        <div class="day-name">Thursday<span class="day-abbr">THU</span><span class="day-date">Apr 16</span></div>
-        <div style="flex:1"></div>
-        <span class="players-summary" id="psum-Thursday"></span>
-        <span class="toggle-icon">▾</span>
-      </div>
-      <div class="day-summary" id="summary-Thursday"></div>
-    </div>
-    <div class="day-form" id="form-Thursday">
-      <div class="tee-groups" id="groups-Thursday"></div>
-      <div class="day-form-footer">
-        <button class="btn-add-group" onclick="addGroup(&#39;Thursday&#39;)">+ Add Tee Time</button>
-        <button class="btn-make-teams" onclick="makeTeams(&#39;Thursday&#39;)">⚔ Make Teams</button>
-      </div>
-      <div id="teams-Thursday"></div>
-    </div></div><div class="day-card" id="card-Friday" style="display: none;">
-    <div class="day-header" onclick="toggleCard(&#39;Friday&#39;)">
-      <div class="day-header-top">
-        <div class="day-name">Friday<span class="day-abbr">FRI</span><span class="day-date">Apr 17</span></div>
-        <div style="flex:1"></div>
-        <span class="players-summary" id="psum-Friday"></span>
-        <span class="toggle-icon">▾</span>
-      </div>
-      <div class="day-summary" id="summary-Friday"></div>
-    </div>
-    <div class="day-form" id="form-Friday">
-      <div class="tee-groups" id="groups-Friday"></div>
-      <div class="day-form-footer">
-        <button class="btn-add-group" onclick="addGroup(&#39;Friday&#39;)">+ Add Tee Time</button>
-        <button class="btn-make-teams" onclick="makeTeams(&#39;Friday&#39;)">⚔ Make Teams</button>
-      </div>
-      <div id="teams-Friday"></div>
-    </div></div><div class="day-card" id="card-Saturday" style="display: none;">
-    <div class="day-header" onclick="toggleCard(&#39;Saturday&#39;)">
-      <div class="day-header-top">
-        <div class="day-name">Saturday<span class="day-abbr">SAT</span><span class="day-date">Apr 18</span></div>
-        <div style="flex:1"></div>
-        <span class="players-summary" id="psum-Saturday"></span>
-        <span class="toggle-icon">▾</span>
-      </div>
-      <div class="day-summary" id="summary-Saturday"></div>
-    </div>
-    <div class="day-form" id="form-Saturday">
-      <div class="tee-groups" id="groups-Saturday"></div>
-      <div class="day-form-footer">
-        <button class="btn-add-group" onclick="addGroup(&#39;Saturday&#39;)">+ Add Tee Time</button>
-        <button class="btn-make-teams" onclick="makeTeams(&#39;Saturday&#39;)">⚔ Make Teams</button>
-      </div>
-      <div id="teams-Saturday"></div>
-    </div></div></div>
+  <div class="calendar-grid" id="calendarGrid"></div>
+</div>
+<div class="cal-sep"></div>
+<div id="calDayCards"></div>
 <div class="toast" id="toast"></div>
 
 <script>
 'use strict';
-const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-const ABBR  = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const HOLES = ['9 Holes','18 Holes','27 Holes','36 Holes'];
 const API   = '/api';
 
@@ -614,9 +513,9 @@ async function doLogout() {
   localStorage.removeItem('authToken');
   applyAdminUI();
   // re-render open day cards to hide name inputs
-  DAYS.forEach(day => {
+  Object.keys(state).forEach(day => {
     const card = document.getElementById('card-'+day);
-    if (card && card.classList.contains('open')) renderDay(day);
+    if (card && card.style.display !== 'none') renderDay(day);
   });
 }
 
@@ -633,18 +532,94 @@ function hideLoginModal() {
 
 // ── Time helpers ──────────────────────────────────────────
 // Store as ISO so the same browser reads back the same day/time
-function dayTimeToISO(dayName, timeStr) {
-  const today = new Date();
-  const diff  = DAYS.indexOf(dayName) - today.getDay();
-  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diff);
-  if (timeStr) { const [h,m] = timeStr.split(':'); d.setHours(+h,+m,0,0); }
-  else d.setHours(12,0,0,0); // noon avoids DST edge cases
-  return d.toISOString();
+function dateTimeToISO(dateStr, timeStr) {
+  const [y,mo,d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, mo-1, d);
+  if (timeStr) { const [h,m]=timeStr.split(':'); dt.setHours(+h,+m,0,0); }
+  else dt.setHours(12,0,0,0);
+  return dt.toISOString();
 }
-function isoToDay(iso)  { return DAYS[new Date(iso).getDay()]; }
+function isoToDateStr(iso) {
+  const d=new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function dateObjToStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+const todayStr = dateObjToStr(new Date());
 function isoToTime(iso) {
   const d = new Date(iso);
   return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+// ── Calendar ──────────────────────────────────────────────
+let calYear=new Date().getFullYear(), calMonth=new Date().getMonth(), selectedDate=null;
+
+function renderCalendar() {
+  const grid=document.getElementById('calendarGrid');
+  const title=document.getElementById('calendarTitle');
+  if (!grid||!title) return;
+  const first=new Date(calYear,calMonth,1);
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  title.textContent=first.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const activeDates=new Set(Object.keys(state).filter(ds=>(state[ds].groups||[]).some(g=>g.time||(g.players&&g.players.length))));
+  const hdrs=['Su','Mo','Tu','We','Th','Fr','Sa'].map(d=>`<div class="cal-hdr">${d}</div>`).join('');
+  let cells='';
+  for(let i=0;i<first.getDay();i++) cells+='<div class="cal-cell cal-empty"></div>';
+  for(let d=1;d<=daysInMonth;d++){
+    const ds=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const cls=['cal-cell',ds===todayStr?'cal-today':'',ds===selectedDate?'cal-sel':'',activeDates.has(ds)?'cal-has':''].filter(Boolean).join(' ');
+    cells+=`<div class="${cls}" onclick="selectCalDate('${ds}')">${d}${activeDates.has(ds)?'<span class="cal-dot"></span>':''}</div>`;
+  }
+  grid.innerHTML=hdrs+cells;
+}
+
+function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
+function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
+
+function selectCalDate(dateStr) {
+  selectedDate=dateStr; renderCalendar(); openDateCard(dateStr);
+}
+
+function openDateCard(dateStr) {
+  getDateState(dateStr);
+  // Hide all other date cards
+  document.querySelectorAll('#calDayCards .day-card').forEach(c=>{if(c.id!=='card-'+dateStr)c.style.display='none';});
+  let card=document.getElementById('card-'+dateStr);
+  if (!card) {
+    const d=new Date(dateStr+'T12:00:00');
+    const dayName=DAY_NAMES[d.getDay()];
+    const dateLong=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    card=document.createElement('div');
+    card.className='day-card open';
+    card.id='card-'+dateStr;
+    card.innerHTML=`
+      <div class="day-header">
+        <div class="day-header-top">
+          <div class="day-name" style="display:flex;flex-direction:column;gap:2px">
+            <span>${dayName}</span>
+            <span class="day-date" style="font-size:.72rem;font-weight:400;opacity:.7">${dateLong}</span>
+          </div>
+          <div style="flex:1"></div>
+          <span class="players-summary" id="psum-${dateStr}"></span>
+        </div>
+        <div class="day-summary" id="summary-${dateStr}"></div>
+      </div>
+      <div class="day-form" id="form-${dateStr}" style="display:block">
+        <div class="tee-groups" id="groups-${dateStr}"></div>
+        <div class="day-form-footer">
+          <button class="btn-add-group" onclick="addGroup('${dateStr}')">+ Add Tee Time</button>
+          <button class="btn-make-teams" onclick="makeTeams('${dateStr}')">⚔ Make Teams</button>
+        </div>
+        <div id="teams-${dateStr}"></div>
+      </div>`;
+    document.getElementById('calDayCards').appendChild(card);
+  } else {
+    card.style.display='';
+  }
+  renderDay(dateStr);
+  updateCardBadge(dateStr);
+  setTimeout(()=>card.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
 }
 
 // Pack holes into notes field (API has no holes column)
@@ -658,7 +633,7 @@ function unpackNotes(raw) {
 
 // ── State ─────────────────────────────────────────────────
 const state = {};
-DAYS.forEach(d => { state[d] = { groups: [] }; });
+function getDateState(ds) { if (!state[ds]) state[ds]={groups:[]}; return state[ds]; }
 let currentCourseId = null;
 let playerRoster    = [];
 
@@ -725,11 +700,11 @@ async function loadAll() {
       }));
     }
 
-    // Tee times → state
-    DAYS.forEach(d => { state[d].groups = []; });
+    // Tee times → state (clear existing)
+    Object.keys(state).forEach(d => { state[d].groups = []; });
     teeTimes.forEach(tt => {
-      const day = isoToDay(tt.tee_time);
-      if (!state[day]) return;
+      const day = isoToDateStr(tt.tee_time);
+      getDateState(day);
       const { holes, notes } = unpackNotes(tt.notes);
       state[day].groups.push({
         id:     'api_' + tt.id,
@@ -764,10 +739,10 @@ async function syncFromAPI() {
       apiId: p.id, name: p.name,
       handicap: p.handicap != null ? String(p.handicap) : ''
     }));
-    DAYS.forEach(d => { state[d].groups = []; });
+    Object.keys(state).forEach(d => { state[d].groups = []; });
     teeTimes.forEach(tt => {
-      const day = isoToDay(tt.tee_time);
-      if (!state[day]) return;
+      const day = isoToDateStr(tt.tee_time);
+      getDateState(day);
       const { holes, notes } = unpackNotes(tt.notes);
       state[day].groups.push({
         id: 'api_'+tt.id, apiId: tt.id,
@@ -782,11 +757,12 @@ async function syncFromAPI() {
       });
     });
     applyPrefs();
-    DAYS.forEach(day => {
+    Object.keys(state).forEach(day => {
       updateCardBadge(day);
       const card = document.getElementById('card-'+day);
-      if (card && card.classList.contains('open')) renderDay(day);
+      if (card && card.style.display !== 'none') renderDay(day);
     });
+    renderCalendar();
     updateStats();
   } catch(e) { console.error('sync:', e); }
 }
@@ -799,48 +775,6 @@ function formatTime(t) {
   return `${hr12}:${m} ${ampm}`;
 }
 
-// ── Day Cards ─────────────────────────────────────────────
-function getDayDate(dayName) {
-  const today = new Date();
-  const diff  = DAYS.indexOf(dayName) - today.getDay();
-  const d = new Date(today);
-  d.setDate(today.getDate() + diff);
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-function buildCard(day, index) {
-  const card = document.createElement('div');
-  card.className = 'day-card';
-  card.id = 'card-' + day;
-  const dateStr = getDayDate(day);
-  card.innerHTML = `
-    <div class="day-header" onclick="toggleCard('${day}')">
-      <div class="day-header-top">
-        <div class="day-name">${day}<span class="day-abbr">${ABBR[index]}</span><span class="day-date">${dateStr}</span></div>
-        <div style="flex:1"></div>
-        <span class="players-summary" id="psum-${day}"></span>
-        <span class="toggle-icon">▾</span>
-      </div>
-      <div class="day-summary" id="summary-${day}"></div>
-    </div>
-    <div class="day-form" id="form-${day}">
-      <div class="tee-groups" id="groups-${day}"></div>
-      <div class="day-form-footer">
-        <button class="btn-add-group" onclick="addGroup('${day}')">+ Add Tee Time</button>
-        <button class="btn-make-teams" onclick="makeTeams('${day}')">⚔ Make Teams</button>
-      </div>
-      <div id="teams-${day}"></div>
-    </div>`;
-  document.getElementById('weekContainer').appendChild(card);
-}
-
-function toggleCard(day) {
-  const card = document.getElementById('card-' + day);
-  const isOpen = card.classList.contains('open');
-  document.querySelectorAll('.day-card.open').forEach(c => c.classList.remove('open'));
-  if (!isOpen) { card.classList.add('open'); renderDay(day); }
-}
-
 // ── Groups ────────────────────────────────────────────────
 async function addGroup(day) {
   const g = newGroup();
@@ -851,7 +785,7 @@ async function addGroup(day) {
     if (!courseId) return;
     const result = await apiFetch('POST', '/tee-times', {
       course_id:   courseId,
-      tee_time:    dayTimeToISO(day, g.time),
+      tee_time:    dateTimeToISO(day, g.time),
       max_players: 4,
       notes:       packNotes(g.holes, g.notes),
     });
@@ -872,7 +806,7 @@ async function autoAddNextGroup(day, sourceGroup) {
   try {
     const courseId = await ensureCourse(); if (!courseId) return;
     const result = await apiFetch('POST', '/tee-times', {
-      course_id: courseId, tee_time: dayTimeToISO(day, newTime),
+      course_id: courseId, tee_time: dateTimeToISO(day, newTime),
       max_players: 4, notes: packNotes('18 Holes', ''),
     });
     g.apiId = result.id; g.id = 'api_' + result.id;
@@ -898,7 +832,7 @@ async function saveTeeTime(g, day) {
   try {
     await apiFetch('PUT', `/tee-times/${g.apiId}`, {
       course_id: courseId,
-      tee_time:  dayTimeToISO(day, g.time),
+      tee_time:  dateTimeToISO(day, g.time),
       notes:     packNotes(g.holes, g.notes),
     });
   } catch(e) { console.error('saveTeeTime:', e); }
@@ -1198,14 +1132,15 @@ function calcHcp(index, tee) {
 
 // ── Card badge & stats ────────────────────────────────────
 function updateCardBadge(day) {
-  const groups=state[day].groups||[];
+  const groups=state[day]?state[day].groups||[]:[];
   const card  =document.getElementById('card-'+day);
   const sumEl =document.getElementById('summary-'+day);
   const psumEl=document.getElementById('psum-'+day);
+  if (!card||!sumEl||!psumEl) { renderCalendar(); return; }
   const active=groups.filter(g=>g.time||(g.players&&g.players.length>0));
   const total =groups.reduce((s,g)=>s+(g.players?g.players.length:0),0);
   if (active.length>0) {
-    card.style.display=''; card.classList.add('has-tee-time');
+    card.classList.add('has-tee-time');
     const sorted=[...active].sort((a,b)=>(a.time||'').localeCompare(b.time||''));
     let html=sorted.map(g=>{
       const t=g.time?formatTime(g.time):'<span style="opacity:.45;font-style:italic">No time</span>';
@@ -1218,16 +1153,14 @@ function updateCardBadge(day) {
     if (total>0) html+=`<div class="day-summary-total">Total: ${total} player${total!==1?'s':''} · ${booked} tee time${booked!==1?'s':''}</div>`;
     sumEl.innerHTML=html; psumEl.textContent='';
   } else {
-    card.style.display='none'; card.classList.remove('has-tee-time');
+    card.classList.remove('has-tee-time');
     sumEl.innerHTML=''; psumEl.textContent='';
   }
-  const anyVisible=DAYS.some(d=>{const c=document.getElementById('card-'+d);return c&&c.style.display!=='none';});
-  const emptyEl=document.getElementById('noTeesMsg');
-  if (emptyEl) emptyEl.style.display=anyVisible?'none':'';
+  renderCalendar();
 }
 
 function updateStats() {
-  const all   =DAYS.flatMap(d=>state[d].groups||[]);
+  const all   =Object.values(state).flatMap(d=>d.groups||[]);
   const booked=all.filter(g=>g.time);
   document.getElementById('statRounds').textContent=booked.length;
   const total=all.reduce((s,g)=>s+(g.players?g.players.length:0),0);
@@ -1246,15 +1179,18 @@ function showToast(msg) {
 function showAllTeeTimes() {
   const body=document.getElementById('teeTimesModalBody');
   body.innerHTML=''; let anyTimes=false;
-  DAYS.forEach(day=>{
+  const sortedDates=Object.keys(state).sort();
+  sortedDates.forEach(day=>{
     const groups=(state[day].groups||[]).filter(g=>g.time||(g.players&&g.players.length));
     if (!groups.length) return; anyTimes=true;
+    const d=new Date(day+'T12:00:00');
+    const heading=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
     const section=document.createElement('div'); section.className='modal-day-section';
-    section.innerHTML=`<div class="modal-day-heading">${day} <span style="font-size:.8em;opacity:.6;font-weight:400">${getDayDate(day)}</span></div>`;
+    section.innerHTML=`<div class="modal-day-heading">${heading}</div>`;
     [...groups].sort((a,b)=>(a.time||'').localeCompare(b.time||'')).forEach(g=>{
       const row=document.createElement('div');
       row.style.cssText='padding:8px 0;border-bottom:1px solid rgba(82,183,136,0.1);cursor:pointer';
-      row.onclick=()=>{closeTeeTimesModal();goToDay(day);};
+      row.onclick=()=>{closeTeeTimesModal();selectCalDate(day);};
       const players=g.players||[];
       row.innerHTML=`
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
@@ -1272,22 +1208,19 @@ function showAllTeeTimes() {
 }
 function closeTeeTimesModal(){document.getElementById('teeTimesModal').classList.remove('open');}
 
-function goToDay(day) {
-  const card=document.getElementById('card-'+day); if(!card) return;
-  document.querySelectorAll('.day-card.open').forEach(c=>c.classList.remove('open'));
-  card.classList.add('open'); renderDay(day);
-  card.scrollIntoView({behavior:'smooth',block:'start'});
-}
+function goToDay(day) { selectCalDate(day); }
+function goToDate(dateStr) { selectCalDate(dateStr); }
 
 // ── Players modal ─────────────────────────────────────────
 function showAllPlayers() {
   const body=document.getElementById('playersModalBody');
   body.innerHTML=''; let anyPlayers=false;
-  DAYS.forEach(day=>{
+  Object.keys(state).sort().forEach(day=>{
     const groups=(state[day].groups||[]).filter(g=>g.players&&g.players.length>0);
     if (!groups.length) return; anyPlayers=true;
+    const d=new Date(day+'T12:00:00');
     const section=document.createElement('div'); section.className='modal-day-section';
-    section.innerHTML=`<div class="modal-day-heading">${day}</div>`;
+    section.innerHTML=`<div class="modal-day-heading">${d.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>`;
     groups.forEach(g=>{
       const timeEl=document.createElement('div'); timeEl.className='modal-group-time';
       timeEl.textContent=`⛳ ${g.time?formatTime(g.time):'No time set'} · ${g.holes}`;
@@ -1314,13 +1247,12 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePlayersModal()
 
 // ── Jump to earliest tee time ─────────────────────────────
 function goToEarliestTee() {
-  const booked=DAYS.flatMap(d=>(state[d].groups||[]).map(g=>({day:d,group:g}))).filter(x=>x.group.time).sort((a,b)=>a.group.time.localeCompare(b.group.time));
+  const booked=Object.keys(state).flatMap(d=>(state[d].groups||[]).map(g=>({day:d,group:g}))).filter(x=>x.group.time).sort((a,b)=>{
+    const dtA=a.day+'T'+a.group.time, dtB=b.day+'T'+b.group.time;
+    return dtA.localeCompare(dtB);
+  });
   if (!booked.length){showToast('No tee times set yet.');return;}
-  const {day}=booked[0];
-  document.querySelectorAll('.day-card.open').forEach(c=>c.classList.remove('open'));
-  const card=document.getElementById('card-'+day);
-  card.classList.add('open'); renderDay(day);
-  card.scrollIntoView({behavior:'smooth',block:'start'});
+  selectCalDate(booked[0].day);
 }
 
 // ── Tee Setup ─────────────────────────────────────────────
@@ -1430,30 +1362,37 @@ function renderTeeSubtitle() {
 }
 
 function refreshAllChips() {
-  DAYS.forEach(day=>{
-    if (document.getElementById('card-'+day).classList.contains('open'))
+  Object.keys(state).forEach(day=>{
+    const card=document.getElementById('card-'+day);
+    if (card && card.style.display !== 'none')
       state[day].groups.forEach(g=>renderGroupChips(day,g));
   });
 }
 
 // ── Expired player cleanup ────────────────────────────────
 function cleanupExpiredPlayers() {
-  const now=new Date(); const todayDay=DAYS[now.getDay()]; let changed=false;
-  DAYS.forEach(day=>{
+  const now=new Date(); const nowStr=dateObjToStr(now); let changed=false;
+  Object.keys(state).forEach(day=>{
     (state[day].groups||[]).forEach(g=>{
-      if (!g.time||!g.players||!g.players.length||day!==todayDay) return;
+      if (!g.time||!g.players||!g.players.length||day!==nowStr) return;
       const [h,m]=g.time.split(':').map(Number);
       const expires=new Date(now.getFullYear(),now.getMonth(),now.getDate(),h,m,0).getTime()+8*3600000;
       if (Date.now()>=expires){g.players=[];changed=true;}
     });
   });
-  if (changed){DAYS.forEach(d=>{updateCardBadge(d);const c=document.getElementById('card-'+d);if(c&&c.classList.contains('open'))renderDay(d);});updateStats();}
+  if (changed){Object.keys(state).forEach(d=>{updateCardBadge(d);const c=document.getElementById('card-'+d);if(c&&c.style.display!=='none')renderDay(d);});updateStats();}
 }
 
 // ── Quick-Add Modal ───────────────────────────────────────
 let _qaDay=null,_qaSel=[],_qaNew=[];
 
-function addTeeTimeForDay(day){_qaDay=day;_qaSel=[];_qaNew=[];document.getElementById('qaTitle').textContent=`Add Tee Time — ${day}`;qaRender();document.getElementById('qaModal').classList.add('open');}
+function addTeeTimeForDay(dateStr){
+  _qaDay=dateStr;_qaSel=[];_qaNew=[];
+  const d=new Date(dateStr+'T12:00:00');
+  const label=d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  document.getElementById('qaTitle').textContent=`Add Tee Time — ${label}`;
+  qaRender();document.getElementById('qaModal').classList.add('open');
+}
 
 function qaRender() {
   const body=document.getElementById('qaBody');
@@ -1517,7 +1456,7 @@ async function qaSave() {
 
   try {
     const courseId=await ensureCourse();
-    const result=await apiFetch('POST','/tee-times',{course_id:courseId,tee_time:dayTimeToISO(day,time),max_players:4,notes:packNotes(holes,'')});
+    const result=await apiFetch('POST','/tee-times',{course_id:courseId,tee_time:dateTimeToISO(day,time),max_players:4,notes:packNotes(holes,'')});
     group.apiId=result.id; group.id='api_'+result.id;
     for (const p of players) {
       if (p.apiId){try{await apiFetch('POST',`/tee-times/${result.id}/players`,{player_id:p.apiId});}catch(e){console.error(e);}}
@@ -1525,11 +1464,8 @@ async function qaSave() {
   } catch(e){showToast('⚠ Failed to save tee time');console.error(e);}
 
   updateCardBadge(day); updateStats(); qaClose();
-  const card=document.getElementById('card-'+day); card.style.display='';
-  document.querySelectorAll('.day-card.open').forEach(c=>c.classList.remove('open'));
-  card.classList.add('open'); renderDay(day);
-  card.scrollIntoView({behavior:'smooth',block:'start'});
-  showToast(`✓ Tee time added for ${day}`);
+  selectCalDate(day);
+  showToast(`✓ Tee time added`);
 }
 
 function qaClose(){document.getElementById('qaModal').classList.remove('open');_qaDay=null;_qaSel=[];_qaNew=[];}
@@ -1601,7 +1537,7 @@ function renderTeams(day,teams,container,totalPlayers,teamSize,randomMode){
   }).join('');
   container.innerHTML=`<div class="teams-panel">
     <div class="teams-panel-header">
-      <span class="teams-panel-title">⚔ Teams for ${day}</span>
+      <span class="teams-panel-title">⚔ Teams</span>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},false)">↺ HCP</button>
         <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},true)">🎲 Random</button>
@@ -1616,30 +1552,21 @@ function renderTeams(day,teams,container,totalPlayers,teamSize,randomMode){
 
 // ── Init ──────────────────────────────────────────────────
 async function init() {
-  // Remove pre-rendered static cards from saved HTML (would create duplicate IDs)
-  const wc = document.getElementById('weekContainer');
-  const noTeesMsg = document.getElementById('noTeesMsg');
-  wc.innerHTML = '';
-  wc.appendChild(noTeesMsg);
-
-  DAYS.forEach((day,i) => buildCard(day,i));
+  renderCalendar();
 
   await loadAll();
 
-  DAYS.forEach(day => updateCardBadge(day));
+  // Open cards for any dates that have tee times (so calendar dots show)
+  Object.keys(state).forEach(day => {
+    if ((state[day].groups||[]).length > 0 && !document.getElementById('card-'+day)) {
+      getDateState(day); // ensure state exists
+    }
+    updateCardBadge(day);
+  });
   updateStats();
+  renderCalendar();
   renderTeeRows();
   if (teeState.open) document.getElementById('teeSetupPanel').classList.add('open');
-
-  const noTeesDays = document.getElementById('noTeesDays');
-  noTeesDays.innerHTML = '';
-  DAYS.forEach(day => {
-    const btn = document.createElement('button');
-    btn.className = 'btn-day-pick';
-    btn.textContent = day;
-    btn.onclick = () => addTeeTimeForDay(day);
-    noTeesDays.appendChild(btn);
-  });
 
   async function saveCourseNameNow() {
     const name = document.getElementById('courseName').value.trim();
