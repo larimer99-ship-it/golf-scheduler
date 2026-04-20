@@ -1061,11 +1061,21 @@ async function addPlayer(day, gid, nameOverride) {
   }
 
   if (!g.players) g.players=[];
+  // Default to Blue tee if player has none and tees are configured
+  if (!playerObj.selectedTee && teeState.tees.length) {
+    const blue = teeState.tees.find(t => t.name.trim().toLowerCase() === 'blue') || null;
+    if (blue) playerObj.selectedTee = String(blue.apiId || blue.id);
+  }
   g.players.push(playerObj);
 
   if (g.apiId && playerObj.apiId) {
+    const tee = playerObj.selectedTee ? teeState.tees.find(t=>String(t.apiId||t.id)===playerObj.selectedTee) : null;
     try { await apiFetch('POST', `/tee-times/${g.apiId}/players`, { player_id:playerObj.apiId }); }
     catch(e) { console.error('add player to tee time:', e); }
+    if (tee && g.apiId && playerObj.apiId) {
+      apiFetch('PUT', `/tee-times/${g.apiId}/players/${playerObj.apiId}`, { tee_id: tee.apiId })
+        .catch(e=>console.error('default tee save:', e));
+    }
   }
 
   const fi=document.getElementById('gfirst-'+gid); if(fi) fi.value='';
