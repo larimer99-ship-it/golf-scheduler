@@ -296,15 +296,20 @@
     .day-header { padding: 8px 14px; gap: 5px; }
     .tee-group-body { padding: 8px 12px; gap: 8px; }
   }
-  /* Calendar */
-  .calendar-widget { max-width:min(960px,100%); margin:0 auto clamp(8px,2vw,16px); padding:0 var(--pad); }
-  .calendar-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  /* Choose Date button */
+  .choose-date-wrap { max-width:min(960px,100%); margin:0 auto clamp(12px,3vw,24px); padding:0 var(--pad); display:flex; justify-content:center; }
+  .btn-choose-date { background:var(--green); border:1px solid var(--light-green); border-radius:6px; color:var(--white); cursor:pointer; font-family:'Playfair Display',serif; font-size:clamp(0.95rem,2.5vw,1.15rem); font-weight:700; letter-spacing:0.04em; padding:clamp(10px,2.5vw,14px) clamp(24px,6vw,40px); transition:background 0.2s,box-shadow 0.2s; box-shadow:0 2px 12px rgba(45,106,79,0.35); }
+  .btn-choose-date:hover { background:#3d8b68; box-shadow:0 4px 18px rgba(45,106,79,0.5); }
+  /* Calendar popup */
+  .cal-popup-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; z-index:500; }
+  .cal-popup { background:var(--dark); border:1px solid rgba(82,183,136,0.3); border-radius:12px; padding:clamp(16px,4vw,24px); width:min(380px,94vw); box-shadow:0 8px 40px rgba(0,0,0,0.6); }
+  .calendar-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
   .cal-nav-btn { background:none; border:1px solid rgba(82,183,136,0.3); border-radius:4px; color:var(--pale-green); cursor:pointer; font-size:1.1rem; padding:4px 12px; transition:background 0.15s; }
   .cal-nav-btn:hover { background:rgba(82,183,136,0.12); }
   .cal-title { font-family:'Playfair Display',serif; font-size:clamp(0.9rem,2.5vw,1.1rem); color:var(--white); font-weight:700; letter-spacing:0.03em; }
   .calendar-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
   .cal-hdr { font-size:0.62rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--light-green); opacity:0.7; text-align:center; padding:4px 0 6px; }
-  .cal-cell { aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; font-size:clamp(0.75rem,1.8vw,0.88rem); color:var(--cream); position:relative; transition:background 0.15s; user-select:none; }
+  .cal-cell { aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:6px; cursor:pointer; font-size:clamp(0.8rem,2vw,0.95rem); color:var(--cream); position:relative; transition:background 0.15s; user-select:none; }
   .cal-cell:hover { background:rgba(82,183,136,0.15); }
   .cal-empty { cursor:default; }
   .cal-empty:hover { background:none; }
@@ -429,15 +434,23 @@
   </div>
 </div>
 
-<div class="calendar-widget">
-  <div class="calendar-nav">
-    <button class="cal-nav-btn" onclick="calPrev()">‹</button>
-    <span class="cal-title" id="calendarTitle"></span>
-    <button class="cal-nav-btn" onclick="calNext()">›</button>
-  </div>
-  <div class="calendar-grid" id="calendarGrid"></div>
+<div class="choose-date-wrap">
+  <button class="btn-choose-date" onclick="openCalPopup()">📅 Choose Date to Play</button>
 </div>
-<div class="cal-sep"></div>
+
+<!-- Calendar popup -->
+<div class="cal-popup-overlay" id="calPopupOverlay" style="display:none" onclick="closeCalPopup()">
+  <div class="cal-popup" onclick="event.stopPropagation()">
+    <div class="calendar-nav">
+      <button class="cal-nav-btn" onclick="calPrev()">‹</button>
+      <span class="cal-title" id="calendarTitle"></span>
+      <button class="cal-nav-btn" onclick="calNext()">›</button>
+    </div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+  </div>
+</div>
+
+<div class="cal-sep" id="calSep" style="display:none"></div>
 <div id="calDayCards"></div>
 <div class="toast" id="toast"></div>
 
@@ -577,8 +590,14 @@ function renderCalendar() {
 function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();}
 function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();}
 
+function openCalPopup() { renderCalendar(); document.getElementById('calPopupOverlay').style.display='flex'; }
+function closeCalPopup() { document.getElementById('calPopupOverlay').style.display='none'; }
+
 function selectCalDate(dateStr) {
-  selectedDate=dateStr; renderCalendar(); openDateCard(dateStr);
+  selectedDate=dateStr;
+  closeCalPopup();
+  document.getElementById('calSep').style.display='';
+  openDateCard(dateStr);
 }
 
 function openDateCard(dateStr) {
