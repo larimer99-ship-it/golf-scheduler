@@ -1518,6 +1518,12 @@ async function qaSave() {
     players.push({name,transport:'walk',handicap:'',selectedTee:null,apiId});
   }
 
+  // Default every player to Blue tee
+  const blueTee = teeState.tees.find(t => t.name.trim().toLowerCase() === 'blue') || null;
+  for (const p of players) {
+    if (!p.selectedTee && blueTee) p.selectedTee = String(blueTee.apiId || blueTee.id);
+  }
+
   const group=newGroup(); group.time=time; group.holes=holes; group.players=players;
   state[day].groups.push(group);
 
@@ -1526,7 +1532,10 @@ async function qaSave() {
     const result=await apiFetch('POST','/tee-times',{course_id:courseId,tee_time:dateTimeToISO(day,time),max_players:4,notes:packNotes(holes,'')});
     group.apiId=result.id; group.id='api_'+result.id;
     for (const p of players) {
-      if (p.apiId){try{await apiFetch('POST',`/tee-times/${result.id}/players`,{player_id:p.apiId});}catch(e){console.error(e);}}
+      if (p.apiId){
+        try{await apiFetch('POST',`/tee-times/${result.id}/players`,{player_id:p.apiId});}catch(e){console.error(e);}
+        if (blueTee) apiFetch('PUT',`/tee-times/${result.id}/players/${p.apiId}`,{tee_id:blueTee.apiId}).catch(e=>console.error(e));
+      }
     }
   } catch(e){showToast('⚠ Failed to save tee time');console.error(e);}
 
