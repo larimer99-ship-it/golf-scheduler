@@ -446,6 +446,85 @@ app.put('/api/teams/:id/scores/:hole', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Hole Stroke Index + Player Scores ──────────────────────────────────────
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS hole_stroke_index (
+    id           SERIAL PRIMARY KEY,
+    date         DATE NOT NULL,
+    hole         INTEGER NOT NULL CHECK (hole BETWEEN 1 AND 18),
+    stroke_index INTEGER CHECK (stroke_index BETWEEN 1 AND 18),
+    UNIQUE(date, hole)
+  );
+  CREATE TABLE IF NOT EXISTS player_scores (
+    id          SERIAL PRIMARY KEY,
+    team_id     INTEGER NOT NULL REFERENCES day_teams(id) ON DELETE CASCADE,
+    player_name TEXT NOT NULL,
+    hole        INTEGER NOT NULL CHECK (hole BETWEEN 1 AND 18),
+    score       INTEGER,
+    updated_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(team_id, player_name, hole)
+  );
+`).catch(err => console.error('hole_si/player_scores init:', err));
+
+app.get('/api/hole-si', async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM hole_stroke_index WHERE date = $1::date ORDER BY hole', [date]
+    );
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/hole-si/:date/:hole', async (req, res) => {
+  const hole = parseInt(req.params.hole);
+  const { stroke_index } = req.body;
+  if (hole < 1 || hole > 18) return res.status(400).json({ error: 'hole must be 1-18' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO hole_stroke_index (date, hole, stroke_index)
+      VALUES ($1::date, $2, $3)
+      ON CONFLICT (date, hole) DO UPDATE SET stroke_index = EXCLUDED.stroke_index
+      RETURNING *
+    `, [req.params.date, hole, stroke_index ?? null]);
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/player-scores', async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required' });
+  try {
+    const { rows } = await pool.query(`
+      SELECT ps.*
+      FROM player_scores ps
+      JOIN day_teams dt ON dt.id = ps.team_id
+      WHERE dt.date = $1::date
+      ORDER BY dt.sort_order, ps.player_name, ps.hole
+    `, [date]);
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/teams/:id/player-scores/:hole', async (req, res) => {
+  const teamId = parseInt(req.params.id);
+  const hole   = parseInt(req.params.hole);
+  const { player_name, score } = req.body;
+  if (!player_name) return res.status(400).json({ error: 'player_name required' });
+  if (hole < 1 || hole > 18) return res.status(400).json({ error: 'hole must be 1-18' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO player_scores (team_id, player_name, hole, score)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (team_id, player_name, hole) DO UPDATE SET score = EXCLUDED.score, updated_at = NOW()
+      RETURNING *
+    `, [teamId, player_name, hole, score ?? null]);
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Hole Scores ─────────────────────────────────────────────────────────────
 
 pool.query(`

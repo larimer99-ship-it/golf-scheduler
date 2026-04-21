@@ -254,6 +254,17 @@
   .sc-input { width:26px; background:rgba(255,255,255,0.06); border:1px solid rgba(82,183,136,0.18); border-radius:3px; color:#fff; font-size:clamp(.62rem,1.3vw,.72rem); padding:2px 0; text-align:center; -moz-appearance:textfield; font-family:'Courier Prime',monospace; }
   .sc-input::-webkit-outer-spin-button,.sc-input::-webkit-inner-spin-button{-webkit-appearance:none}
   .sc-input:focus { outline:none; border-color:rgba(82,183,136,0.65); background:rgba(82,183,136,0.12); }
+  .sc-si-input { color:var(--sand) !important; border-color:rgba(212,168,83,0.3) !important; width:22px; }
+  .sc-si-input:focus { border-color:rgba(212,168,83,0.7) !important; }
+  .sc-hcp-row td { background:rgba(212,168,83,0.06); }
+  .sc-hcp-label { color:var(--sand); font-weight:700; letter-spacing:.06em; font-size:.65rem; }
+  .sc-si-cell { color:var(--sand); opacity:.75; font-size:.65rem; }
+  .sc-team-header-td { font-weight:700; font-size:clamp(.72rem,1.6vw,.82rem); padding:7px 10px 4px !important; border-top:2px solid rgba(255,255,255,0.06); }
+  .sc-player-label { padding-left:16px !important; opacity:.82; font-size:clamp(.6rem,1.2vw,.68rem); }
+  .sc-player-row td { font-size:clamp(.6rem,1.2vw,.68rem); }
+  .sc-team-score-row td { background:rgba(0,0,0,0.14); border-top:1px solid rgba(255,255,255,0.08); }
+  .sc-team-score-label { font-weight:700; letter-spacing:.04em; font-size:clamp(.6rem,1.2vw,.68rem); }
+  .sc-team-score-td { font-weight:700; }
 
   /* Players modal */
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:var(--pad); animation:fade-in 0.18s ease; }
@@ -1660,21 +1671,34 @@ async function saveTeamsToDB(day, teams) {
     const payload = teams.map(t => ({
       name:    t.name,
       color:   t.color,
-      players: t.players.map(p => p.name),
+      players: t.players.map(p => ({
+        name:       p.name,
+        handicap:   p.handicap   ?? null,
+        playingHcp: p.playingHcp ?? null,
+      })),
     }));
     const saved = await apiFetch('POST', '/teams', { date: day, teams: payload });
     savedTeams[day] = saved;
-    // Refresh scorecard if it's open for this day
     if (_scorecardDay === day) await loadScores(day);
   } catch(e) { console.error('saveTeamsToDB:', e); }
 }
 
 // ── Scorecard ─────────────────────────────────────────────
-const savedTeams    = {}; // { [day]: [{id, name, color, players}] }
-const teamScoreData = {}; // { [teamId]: { [hole]: score } }
+const savedTeams    = {}; // { [day]: [{id, name, color, players:[{name,handicap,playingHcp}]}] }
+const playerScoreData = {}; // { [teamId]: { [playerName]: { [hole]: score } } }
+const holeSI          = {}; // { [day]: { [hole]: strokeIndex } }
 let _scorecardDay      = null;
 let _scorecardInterval = null;
 const _scoreSaveTimers = {};
+
+function sanitizeId(str) { return String(str).replace(/[^a-zA-Z0-9]/g, '_'); }
+
+function strokesOnHole(playingHcp, si) {
+  if (!si || playingHcp == null) return 0;
+  const h = parseFloat(playingHcp);
+  if (isNaN(h) || h <= 0) return 0;
+  return Math.floor(h / 18) + (si <= h % 18 ? 1 : 0);
+}
 
 async function openScorecard(day) {
   const el = document.getElementById('scorecard-'+day);
@@ -1698,15 +1722,19 @@ function closeScorecard(day) {
 async function loadScores(day) {
   if (!day) return;
   try {
-    const [teams, scores] = await Promise.all([
+    const [teams, pScores, siRows] = await Promise.all([
       apiFetch('GET', `/teams?date=${day}`),
-      apiFetch('GET', `/team-scores?date=${day}`),
+      apiFetch('GET', `/player-scores?date=${day}`),
+      apiFetch('GET', `/hole-si?date=${day}`),
     ]);
     savedTeams[day] = teams;
-    scores.forEach(s => {
-      if (!teamScoreData[s.team_id]) teamScoreData[s.team_id] = {};
-      teamScoreData[s.team_id][s.hole] = s.score;
+    pScores.forEach(s => {
+      if (!playerScoreData[s.team_id]) playerScoreData[s.team_id] = {};
+      if (!playerScoreData[s.team_id][s.player_name]) playerScoreData[s.team_id][s.player_name] = {};
+      playerScoreData[s.team_id][s.player_name][s.hole] = s.score;
     });
+    if (!holeSI[day]) holeSI[day] = {};
+    siRows.forEach(r => { holeSI[day][r.hole] = r.stroke_index; });
     const active = document.activeElement;
     if (!active || !active.classList.contains('sc-input')) renderScorecard(day);
   } catch(e) { console.error('loadScores:', e); }
@@ -1730,34 +1758,90 @@ function renderScorecard(day) {
     return;
   }
 
-  const holeNums    = Array.from({length:18}, (_,i) => i+1);
-  const headerFront = holeNums.slice(0,9).map(h=>`<th>${h}</th>`).join('');
-  const headerBack  = holeNums.slice(9).map(h=>`<th>${h}</th>`).join('');
+  const holeNums = Array.from({length:18}, (_,i) => i+1);
+  const si       = holeSI[day] || {};
+  const admin    = isAdmin();
 
-  const bodyRows = teams.map(team => {
-    const sc      = teamScoreData[team.id] || {};
-    const players = Array.isArray(team.players) ? team.players.join(', ') : '';
-    let front=0, back=0;
-    const cells = holeNums.map(h => {
-      const v = sc[h];
-      if (h <= 9 && v != null) front += v;
-      if (h > 9  && v != null) back  += v;
-      return `<td><input type="number" class="sc-input" id="sci-${team.id}-${h}" min="1" max="20" value="${v!=null?v:''}" onchange="saveScore('${team.id}','${h}',this.value)" /></td>`;
+  // HCP (stroke index) row
+  const siRow = `<tr class="sc-hcp-row">
+    <td class="sc-label-td sc-hcp-label">HCP</td>
+    ${holeNums.slice(0,9).map(h => admin
+      ? `<td><input type="number" class="sc-input sc-si-input" min="1" max="18" value="${si[h]||''}" placeholder="-" onchange="saveHoleSI('${day}',${h},this.value)" /></td>`
+      : `<td class="sc-si-cell">${si[h]||'-'}</td>`
+    ).join('')}
+    <td class="sc-sub-td"></td>
+    ${holeNums.slice(9).map(h => admin
+      ? `<td><input type="number" class="sc-input sc-si-input" min="1" max="18" value="${si[h]||''}" placeholder="-" onchange="saveHoleSI('${day}',${h},this.value)" /></td>`
+      : `<td class="sc-si-cell">${si[h]||'-'}</td>`
+    ).join('')}
+    <td class="sc-sub-td"></td>
+    <td class="sc-tot-td"></td>
+  </tr>`;
+
+  // One section per team
+  const teamSections = teams.map(team => {
+    const tc      = team.color || 'var(--light-green)';
+    const players = Array.isArray(team.players) ? team.players : [];
+
+    // Player rows
+    const playerRows = players.map(player => {
+      const pName    = typeof player === 'string' ? player : player.name;
+      const phcp     = typeof player === 'object' && player.playingHcp != null ? player.playingHcp : null;
+      const hcpLabel = phcp != null ? ` (${phcp})` : (typeof player === 'object' && player.handicap ? ` [${player.handicap}]` : '');
+      const pScores  = (playerScoreData[team.id] || {})[pName] || {};
+      const sid      = sanitizeId(pName);
+      const safe     = pName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      let front=0, back=0, fc=0, bc=0;
+      const cells = holeNums.map(h => {
+        const v = pScores[h];
+        if (h<=9  && v!=null) { front+=v; fc++; }
+        if (h>9   && v!=null) { back +=v; bc++; }
+        return `<td><input type="number" class="sc-input" min="1" max="20" value="${v!=null?v:''}" onchange="savePlayerScore('${team.id}','${safe}',${h},this.value)" /></td>`;
+      });
+      return `<tr class="sc-player-row">
+        <td class="sc-label-td sc-player-label">${pName}${hcpLabel}</td>
+        ${cells.slice(0,9).join('')}
+        <td class="sc-sub-td" id="sc-pout-${team.id}-${sid}">${fc?front:''}</td>
+        ${cells.slice(9).join('')}
+        <td class="sc-sub-td" id="sc-pin-${team.id}-${sid}">${bc?back:''}</td>
+        <td class="sc-tot-td" id="sc-ptot-${team.id}-${sid}">${(fc||bc)?front+back:''}</td>
+      </tr>`;
     });
-    const total = front + back;
-    const ns = team.color ? `color:${team.color};font-weight:700` : 'font-weight:700';
-    return `<tr>
-      <td class="sc-label-td">
-        <span style="${ns}">${team.name}</span>
-        ${players ? `<br><span style="opacity:.55;font-size:.85em">${players}</span>` : ''}
-      </td>
-      ${cells.slice(0,9).join('')}
-      <td class="sc-sub-td" id="sc-out-${team.id}">${front||''}</td>
-      ${cells.slice(9).join('')}
-      <td class="sc-sub-td" id="sc-in-${team.id}">${back||''}</td>
-      <td class="sc-tot-td" id="sc-tot-${team.id}">${total||''}</td>
-    </tr>`;
+
+    // Team score row — best net per hole
+    let tsF=0, tsB=0, tsFc=0, tsBc=0;
+    const tsCells = holeNums.map(h => {
+      const hSI   = si[h] || null;
+      let bestNet = null;
+      players.forEach(player => {
+        const pName = typeof player === 'string' ? player : player.name;
+        const phcp  = typeof player === 'object' ? player.playingHcp : null;
+        const gross = (playerScoreData[team.id]||{})[pName]?.[h];
+        if (gross == null) return;
+        const net = gross - strokesOnHole(phcp, hSI);
+        if (bestNet === null || net < bestNet) bestNet = net;
+      });
+      if (bestNet !== null) {
+        if (h<=9)  { tsF+=bestNet; tsFc++; }
+        else       { tsB+=bestNet; tsBc++; }
+      }
+      return `<td class="sc-team-score-td" id="sc-ts-${team.id}-${h}">${bestNet!=null?bestNet:''}</td>`;
+    });
+
+    return `<tr><td class="sc-label-td sc-team-header-td" colspan="22" style="color:${tc};border-top-color:${tc}44">${team.name}</td></tr>
+      ${playerRows.join('')}
+      <tr class="sc-team-score-row">
+        <td class="sc-label-td sc-team-score-label" style="color:${tc}">Team Score</td>
+        ${tsCells.slice(0,9).join('')}
+        <td class="sc-sub-td" id="sc-tsout-${team.id}">${tsFc?tsF:''}</td>
+        ${tsCells.slice(9).join('')}
+        <td class="sc-sub-td" id="sc-tsin-${team.id}">${tsBc?tsB:''}</td>
+        <td class="sc-tot-td" id="sc-tstot-${team.id}">${(tsFc||tsBc)?tsF+tsB:''}</td>
+      </tr>`;
   }).join('');
+
+  const hFront = holeNums.slice(0,9).map(h=>`<th>${h}</th>`).join('');
+  const hBack  = holeNums.slice(9).map(h=>`<th>${h}</th>`).join('');
 
   el.innerHTML = `<div class="scorecard-panel">
     <div class="scorecard-header">
@@ -1769,41 +1853,96 @@ function renderScorecard(day) {
       <table class="scorecard-table">
         <thead>
           <tr>
-            <th class="sc-label-th">Team</th>
-            ${headerFront}
-            <th class="sc-sub-th">OUT</th>
-            ${headerBack}
-            <th class="sc-sub-th">IN</th>
-            <th class="sc-tot-th">TOT</th>
+            <th class="sc-label-th"></th>
+            ${hFront}<th class="sc-sub-th">OUT</th>${hBack}
+            <th class="sc-sub-th">IN</th><th class="sc-tot-th">TOT</th>
           </tr>
+          ${siRow}
         </thead>
-        <tbody>${bodyRows}</tbody>
+        <tbody>${teamSections}</tbody>
       </table>
     </div>
   </div>`;
 }
 
-function saveScore(teamId, hole, rawValue) {
+const _siSaveTimers = {};
+function saveHoleSI(day, hole, rawValue) {
+  const si  = rawValue === '' ? null : parseInt(rawValue);
+  const key = `si_${day}_${hole}`;
+  clearTimeout(_siSaveTimers[key]);
+  _siSaveTimers[key] = setTimeout(async () => {
+    try {
+      await apiFetch('PUT', `/hole-si/${day}/${hole}`, { stroke_index: si });
+      if (!holeSI[day]) holeSI[day] = {};
+      holeSI[day][hole] = si;
+      // Re-render team score rows (net scores change with SI)
+      if (_scorecardDay === day) renderScorecard(day);
+    } catch(e) { console.error('saveHoleSI:', e); }
+  }, 600);
+}
+
+function savePlayerScore(teamId, playerName, hole, rawValue) {
   const score = rawValue === '' ? null : parseInt(rawValue);
-  const key   = `${teamId}_${hole}`;
+  const key   = `ps_${teamId}_${playerName}_${hole}`;
   clearTimeout(_scoreSaveTimers[key]);
   _scoreSaveTimers[key] = setTimeout(async () => {
     try {
-      await apiFetch('PUT', `/teams/${teamId}/scores/${hole}`, { score });
-      if (!teamScoreData[teamId]) teamScoreData[teamId] = {};
-      teamScoreData[teamId][hole] = score;
-      // Update subtotals without full re-render
-      const sc = teamScoreData[teamId];
-      let front=0, back=0;
-      for (let h=1;  h<=9;  h++) if (sc[h]!=null) front+=sc[h];
-      for (let h=10; h<=18; h++) if (sc[h]!=null) back +=sc[h];
-      const outEl = document.getElementById('sc-out-'+teamId);
-      const inEl  = document.getElementById('sc-in-' +teamId);
-      const totEl = document.getElementById('sc-tot-'+teamId);
-      if (outEl) outEl.textContent = front||'';
-      if (inEl)  inEl.textContent  = back||'';
-      if (totEl) totEl.textContent = (front+back)||'';
-    } catch(e) { console.error('saveScore:', e); }
+      await apiFetch('PUT', `/teams/${teamId}/player-scores/${hole}`, { player_name: playerName, score });
+      if (!playerScoreData[teamId]) playerScoreData[teamId] = {};
+      if (!playerScoreData[teamId][playerName]) playerScoreData[teamId][playerName] = {};
+      playerScoreData[teamId][playerName][hole] = score;
+      // Update player subtotals in place
+      const sid  = sanitizeId(playerName);
+      const pSc  = playerScoreData[teamId][playerName];
+      let pF=0,pB=0,pFc=0,pBc=0;
+      for (let h=1;  h<=9;  h++) if (pSc[h]!=null){pF+=pSc[h];pFc++;}
+      for (let h=10; h<=18; h++) if (pSc[h]!=null){pB+=pSc[h];pBc++;}
+      const po=document.getElementById(`sc-pout-${teamId}-${sid}`);
+      const pi=document.getElementById(`sc-pin-${teamId}-${sid}`);
+      const pt=document.getElementById(`sc-ptot-${teamId}-${sid}`);
+      if(po) po.textContent=pFc?pF:'';
+      if(pi) pi.textContent=pBc?pB:'';
+      if(pt) pt.textContent=(pFc||pBc)?pF+pB:'';
+      // Recalculate team score for this hole and update totals
+      const day   = _scorecardDay;
+      const teams = savedTeams[day] || [];
+      const team  = teams.find(t => String(t.id) === String(teamId));
+      if (!team) return;
+      const si    = (holeSI[day]||{})[hole] || null;
+      const players = Array.isArray(team.players) ? team.players : [];
+      let bestNet = null;
+      players.forEach(player => {
+        const pN   = typeof player==='string'?player:player.name;
+        const phcp = typeof player==='object'?player.playingHcp:null;
+        const gross= (playerScoreData[teamId]||{})[pN]?.[hole];
+        if (gross==null) return;
+        const net  = gross - strokesOnHole(phcp, si);
+        if (bestNet===null || net<bestNet) bestNet=net;
+      });
+      const tsEl=document.getElementById(`sc-ts-${teamId}-${hole}`);
+      if(tsEl) tsEl.textContent=bestNet!=null?bestNet:'';
+      // Update team subtotals
+      let tsF=0,tsB=0,tsFc=0,tsBc=0;
+      for (let h=1; h<=18; h++) {
+        const hSI=((holeSI[day]||{})[h])||null;
+        let bn=null;
+        players.forEach(player=>{
+          const pN=typeof player==='string'?player:player.name;
+          const phcp=typeof player==='object'?player.playingHcp:null;
+          const gross=(playerScoreData[teamId]||{})[pN]?.[h];
+          if(gross==null)return;
+          const net=gross-strokesOnHole(phcp,hSI);
+          if(bn===null||net<bn)bn=net;
+        });
+        if(bn!==null){if(h<=9){tsF+=bn;tsFc++;}else{tsB+=bn;tsBc++;}}
+      }
+      const to=document.getElementById(`sc-tsout-${teamId}`);
+      const ti=document.getElementById(`sc-tsin-${teamId}`);
+      const tt=document.getElementById(`sc-tstot-${teamId}`);
+      if(to)to.textContent=tsFc?tsF:'';
+      if(ti)ti.textContent=tsBc?tsB:'';
+      if(tt)tt.textContent=(tsFc||tsBc)?tsF+tsB:'';
+    } catch(e) { console.error('savePlayerScore:', e); }
   }, 600);
 }
 
