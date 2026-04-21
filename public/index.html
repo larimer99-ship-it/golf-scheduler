@@ -260,6 +260,12 @@
   .sc-hcp-row td { background:rgba(212,168,83,0.06); }
   .sc-hcp-label { color:var(--sand); font-weight:700; letter-spacing:.06em; font-size:.65rem; }
   .sc-si-cell { color:var(--sand); opacity:.75; font-size:.65rem; }
+  .sc-par-row td { background:rgba(82,183,136,0.08); }
+  .sc-par-label { color:var(--light-green); font-weight:700; letter-spacing:.06em; font-size:.65rem; }
+  .sc-par-cell { color:var(--light-green); opacity:.85; font-size:.65rem; }
+  .sc-par-input { color:var(--light-green) !important; border-color:rgba(82,183,136,0.3) !important; width:22px; }
+  .sc-par-input:focus { border-color:rgba(82,183,136,0.7) !important; }
+  .sc-par-sub { color:var(--light-green) !important; font-weight:700; background:rgba(82,183,136,0.1) !important; }
   .sc-team-header-td { font-weight:700; font-size:clamp(.72rem,1.6vw,.82rem); padding:7px 10px 4px !important; border-top:2px solid rgba(255,255,255,0.06); }
   .sc-player-label { padding-left:16px !important; opacity:.82; font-size:clamp(.6rem,1.2vw,.68rem); }
   .sc-player-row td { font-size:clamp(.6rem,1.2vw,.68rem); }
@@ -735,13 +741,15 @@ async function ensureCourse() {
 // ── Load everything from API ──────────────────────────────
 async function loadAll() {
   try {
-    const [teeTimes, players, courses, hcapRows] = await Promise.all([
+    const [teeTimes, players, courses, hcapRows, parRows] = await Promise.all([
       apiFetch('GET', '/tee-times'),
       apiFetch('GET', '/players'),
       apiFetch('GET', '/courses'),
       apiFetch('GET', '/hole-handicaps'),
+      apiFetch('GET', '/hole-pars'),
     ]);
-    hcapRows.forEach(r => { globalHoleSI[r.hole] = r.stroke_index; });
+    hcapRows.forEach(r => { globalHoleSI[r.hole]  = r.stroke_index; });
+    parRows.forEach(r  => { globalHolePar[r.hole] = r.par; });
 
     // Roster
     playerRoster = players.map(p => ({
@@ -1705,6 +1713,7 @@ async function saveTeamsToDB(day, teams, bestBalls) {
 const savedTeams      = {}; // { [day]: [{id, name, color, players:[{name,handicap,playingHcp}]}] }
 const playerScoreData = {}; // { [teamId]: { [playerName]: { [hole]: score } } }
 const globalHoleSI    = {}; // { [hole]: strokeIndex } — global, set once, used for all dates
+const globalHolePar   = {}; // { [hole]: par }        — global, set once, used for all dates
 let _scorecardDay      = null;
 let _scorecardInterval = null;
 const _scoreSaveTimers = {};
@@ -1776,6 +1785,25 @@ function renderScorecard(day) {
   const holeNums = Array.from({length:18}, (_,i) => i+1);
   const si       = globalHoleSI;
   const admin    = isAdmin();
+
+  const par = globalHolePar;
+  // PAR row — global values, admin-editable, shown above HCP
+  const parOut = holeNums.slice(0,9).reduce((s,h) => s + (par[h]||0), 0);
+  const parIn  = holeNums.slice(9).reduce((s,h)  => s + (par[h]||0), 0);
+  const parRow = `<tr class="sc-par-row">
+    <td class="sc-label-td sc-par-label">PAR</td>
+    ${holeNums.slice(0,9).map(h => admin
+      ? `<td><input type="number" class="sc-input sc-par-input" min="2" max="6" value="${par[h]||''}" placeholder="-" onchange="saveHolePar(${h},this.value)" /></td>`
+      : `<td class="sc-par-cell">${par[h]||'-'}</td>`
+    ).join('')}
+    <td class="sc-sub-td sc-par-sub">${parOut||''}</td>
+    ${holeNums.slice(9).map(h => admin
+      ? `<td><input type="number" class="sc-input sc-par-input" min="2" max="6" value="${par[h]||''}" placeholder="-" onchange="saveHolePar(${h},this.value)" /></td>`
+      : `<td class="sc-par-cell">${par[h]||'-'}</td>`
+    ).join('')}
+    <td class="sc-sub-td sc-par-sub">${parIn||''}</td>
+    <td class="sc-tot-td sc-par-sub">${(parOut+parIn)||''}</td>
+  </tr>`;
 
   // HCP (stroke index) row — global values, admin-editable
   const siRow = `<tr class="sc-hcp-row">
@@ -1874,12 +1902,26 @@ function renderScorecard(day) {
             ${hFront}<th class="sc-sub-th">OUT</th>${hBack}
             <th class="sc-sub-th">IN</th><th class="sc-tot-th">TOT</th>
           </tr>
+          ${parRow}
           ${siRow}
         </thead>
         <tbody>${teamSections}</tbody>
       </table>
     </div>
   </div>`;
+}
+
+const _parSaveTimers = {};
+function saveHolePar(hole, rawValue) {
+  const par = rawValue === '' ? null : parseInt(rawValue);
+  clearTimeout(_parSaveTimers[hole]);
+  _parSaveTimers[hole] = setTimeout(async () => {
+    try {
+      await apiFetch('PUT', `/hole-pars/${hole}`, { par });
+      globalHolePar[hole] = par;
+      if (_scorecardDay) renderScorecard(_scorecardDay);
+    } catch(e) { console.error('saveHolePar:', e); }
+  }, 600);
 }
 
 const _siSaveTimers = {};

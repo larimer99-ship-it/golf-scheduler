@@ -450,6 +450,36 @@ app.put('/api/teams/:id/scores/:hole', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Global Hole Pars ────────────────────────────────────────────────────────
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS hole_pars (
+    hole INTEGER PRIMARY KEY CHECK (hole BETWEEN 1 AND 18),
+    par  INTEGER CHECK (par BETWEEN 2 AND 6)
+  )
+`).catch(err => console.error('hole_pars init:', err));
+
+app.get('/api/hole-pars', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM hole_pars ORDER BY hole');
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/hole-pars/:hole', requireAuth, async (req, res) => {
+  const hole = parseInt(req.params.hole);
+  const { par } = req.body;
+  if (hole < 1 || hole > 18) return res.status(400).json({ error: 'hole must be 1-18' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO hole_pars (hole, par) VALUES ($1, $2)
+      ON CONFLICT (hole) DO UPDATE SET par = EXCLUDED.par
+      RETURNING *
+    `, [hole, par ?? null]);
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Global Hole Handicaps ────────────────────────────────────────────────────
 
 pool.query(`
