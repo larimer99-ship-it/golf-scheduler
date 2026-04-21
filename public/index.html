@@ -734,11 +734,13 @@ async function ensureCourse() {
 // ── Load everything from API ──────────────────────────────
 async function loadAll() {
   try {
-    const [teeTimes, players, courses] = await Promise.all([
+    const [teeTimes, players, courses, hcapRows] = await Promise.all([
       apiFetch('GET', '/tee-times'),
       apiFetch('GET', '/players'),
       apiFetch('GET', '/courses'),
+      apiFetch('GET', '/hole-handicaps'),
     ]);
+    hcapRows.forEach(r => { globalHoleSI[r.hole] = r.stroke_index; });
 
     // Roster
     playerRoster = players.map(p => ({
@@ -1684,9 +1686,9 @@ async function saveTeamsToDB(day, teams) {
 }
 
 // ── Scorecard ─────────────────────────────────────────────
-const savedTeams    = {}; // { [day]: [{id, name, color, players:[{name,handicap,playingHcp}]}] }
+const savedTeams      = {}; // { [day]: [{id, name, color, players:[{name,handicap,playingHcp}]}] }
 const playerScoreData = {}; // { [teamId]: { [playerName]: { [hole]: score } } }
-const holeSI          = {}; // { [day]: { [hole]: strokeIndex } }
+const globalHoleSI    = {}; // { [hole]: strokeIndex } — global, set once, used for all dates
 let _scorecardDay      = null;
 let _scorecardInterval = null;
 const _scoreSaveTimers = {};
@@ -1722,10 +1724,9 @@ function closeScorecard(day) {
 async function loadScores(day) {
   if (!day) return;
   try {
-    const [teams, pScores, siRows] = await Promise.all([
+    const [teams, pScores] = await Promise.all([
       apiFetch('GET', `/teams?date=${day}`),
       apiFetch('GET', `/player-scores?date=${day}`),
-      apiFetch('GET', `/hole-si?date=${day}`),
     ]);
     savedTeams[day] = teams;
     pScores.forEach(s => {
@@ -1733,8 +1734,6 @@ async function loadScores(day) {
       if (!playerScoreData[s.team_id][s.player_name]) playerScoreData[s.team_id][s.player_name] = {};
       playerScoreData[s.team_id][s.player_name][s.hole] = s.score;
     });
-    if (!holeSI[day]) holeSI[day] = {};
-    siRows.forEach(r => { holeSI[day][r.hole] = r.stroke_index; });
     const active = document.activeElement;
     if (!active || !active.classList.contains('sc-input')) renderScorecard(day);
   } catch(e) { console.error('loadScores:', e); }
@@ -1759,19 +1758,19 @@ function renderScorecard(day) {
   }
 
   const holeNums = Array.from({length:18}, (_,i) => i+1);
-  const si       = holeSI[day] || {};
+  const si       = globalHoleSI;
   const admin    = isAdmin();
 
-  // HCP (stroke index) row
+  // HCP (stroke index) row — global values, admin-editable
   const siRow = `<tr class="sc-hcp-row">
     <td class="sc-label-td sc-hcp-label">HCP</td>
     ${holeNums.slice(0,9).map(h => admin
-      ? `<td><input type="number" class="sc-input sc-si-input" min="1" max="18" value="${si[h]||''}" placeholder="-" onchange="saveHoleSI('${day}',${h},this.value)" /></td>`
+      ? `<td><input type="number" class="sc-input sc-si-input" min="1" max="18" value="${si[h]||''}" placeholder="-" onchange="saveHoleSI(${h},this.value)" /></td>`
       : `<td class="sc-si-cell">${si[h]||'-'}</td>`
     ).join('')}
     <td class="sc-sub-td"></td>
     ${holeNums.slice(9).map(h => admin
-      ? `<td><input type="number" class="sc-input sc-si-input" min="1" max="18" value="${si[h]||''}" placeholder="-" onchange="saveHoleSI('${day}',${h},this.value)" /></td>`
+      ? `<td><input type="number" class="sc-input sc-si-input" min="1" max="18" value="${si[h]||''}" placeholder="-" onchange="saveHoleSI(${h},this.value)" /></td>`
       : `<td class="sc-si-cell">${si[h]||'-'}</td>`
     ).join('')}
     <td class="sc-sub-td"></td>
@@ -1866,17 +1865,16 @@ function renderScorecard(day) {
 }
 
 const _siSaveTimers = {};
-function saveHoleSI(day, hole, rawValue) {
+function saveHoleSI(hole, rawValue) {
   const si  = rawValue === '' ? null : parseInt(rawValue);
-  const key = `si_${day}_${hole}`;
+  const key = `si_${hole}`;
   clearTimeout(_siSaveTimers[key]);
   _siSaveTimers[key] = setTimeout(async () => {
     try {
-      await apiFetch('PUT', `/hole-si/${day}/${hole}`, { stroke_index: si });
-      if (!holeSI[day]) holeSI[day] = {};
-      holeSI[day][hole] = si;
-      // Re-render team score rows (net scores change with SI)
-      if (_scorecardDay === day) renderScorecard(day);
+      await apiFetch('PUT', `/hole-handicaps/${hole}`, { stroke_index: si });
+      globalHoleSI[hole] = si;
+      // Re-render open scorecard so team net scores update
+      if (_scorecardDay) renderScorecard(_scorecardDay);
     } catch(e) { console.error('saveHoleSI:', e); }
   }, 600);
 }
@@ -1908,7 +1906,7 @@ function savePlayerScore(teamId, playerName, hole, rawValue) {
       const teams = savedTeams[day] || [];
       const team  = teams.find(t => String(t.id) === String(teamId));
       if (!team) return;
-      const si    = (holeSI[day]||{})[hole] || null;
+      const si    = globalHoleSI[hole] || null;
       const players = Array.isArray(team.players) ? team.players : [];
       let bestNet = null;
       players.forEach(player => {
@@ -1924,7 +1922,7 @@ function savePlayerScore(teamId, playerName, hole, rawValue) {
       // Update team subtotals
       let tsF=0,tsB=0,tsFc=0,tsBc=0;
       for (let h=1; h<=18; h++) {
-        const hSI=((holeSI[day]||{})[h])||null;
+        const hSI=globalHoleSI[h]||null;
         let bn=null;
         players.forEach(player=>{
           const pN=typeof player==='string'?player:player.name;

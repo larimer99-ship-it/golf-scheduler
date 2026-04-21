@@ -446,6 +446,37 @@ app.put('/api/teams/:id/scores/:hole', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Global Hole Handicaps ────────────────────────────────────────────────────
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS hole_handicaps (
+    hole         INTEGER PRIMARY KEY CHECK (hole BETWEEN 1 AND 18),
+    stroke_index INTEGER CHECK (stroke_index BETWEEN 1 AND 18)
+  )
+`).catch(err => console.error('hole_handicaps init:', err));
+
+app.get('/api/hole-handicaps', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM hole_handicaps ORDER BY hole');
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/hole-handicaps/:hole', requireAuth, async (req, res) => {
+  const hole = parseInt(req.params.hole);
+  const { stroke_index } = req.body;
+  if (hole < 1 || hole > 18) return res.status(400).json({ error: 'hole must be 1-18' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO hole_handicaps (hole, stroke_index)
+      VALUES ($1, $2)
+      ON CONFLICT (hole) DO UPDATE SET stroke_index = EXCLUDED.stroke_index
+      RETURNING *
+    `, [hole, stroke_index ?? null]);
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Hole Stroke Index + Player Scores ──────────────────────────────────────
 
 pool.query(`
