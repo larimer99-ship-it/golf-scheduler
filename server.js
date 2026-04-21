@@ -357,6 +357,51 @@ app.put('/api/tee-times/:id/players/:playerId', async (req, res) => {
   }
 });
 
+// ─── Hole Scores ─────────────────────────────────────────────────────────────
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS hole_scores (
+    id          SERIAL PRIMARY KEY,
+    tee_time_id INTEGER NOT NULL REFERENCES tee_times(id) ON DELETE CASCADE,
+    hole        INTEGER NOT NULL CHECK (hole BETWEEN 1 AND 18),
+    score       INTEGER,
+    updated_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(tee_time_id, hole)
+  )
+`).catch(err => console.error('hole_scores init:', err));
+
+app.get('/api/scores', async (req, res) => {
+  const { date } = req.query;
+  try {
+    const { rows } = date
+      ? await pool.query(`
+          SELECT hs.*
+          FROM hole_scores hs
+          JOIN tee_times tt ON tt.id = hs.tee_time_id
+          WHERE tt.tee_time::date = $1::date
+          ORDER BY tt.tee_time, hs.hole
+        `, [date])
+      : await pool.query('SELECT * FROM hole_scores ORDER BY tee_time_id, hole');
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/tee-times/:id/scores/:hole', async (req, res) => {
+  const teeTimeId = parseInt(req.params.id);
+  const hole      = parseInt(req.params.hole);
+  const { score } = req.body;
+  if (hole < 1 || hole > 18) return res.status(400).json({ error: 'hole must be 1-18' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO hole_scores (tee_time_id, hole, score)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (tee_time_id, hole) DO UPDATE SET score = EXCLUDED.score, updated_at = NOW()
+      RETURNING *
+    `, [teeTimeId, hole, score ?? null]);
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Start ───────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {

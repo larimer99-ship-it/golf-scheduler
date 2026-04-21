@@ -230,6 +230,31 @@
   .btn-cancel-teams { background:none; border:none; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.65rem,1.4vw,0.72rem); opacity:0.65; text-align:right; padding:2px 0; transition:opacity 0.15s; }
   .btn-cancel-teams:hover { opacity:1; }
 
+  /* Scorecard */
+  .btn-scorecard { flex:1; background:rgba(82,183,136,0.12); border:1px solid rgba(82,183,136,0.35); border-radius:6px; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); font-weight:700; letter-spacing:0.08em; padding:clamp(8px,1.5vw,11px); transition:background 0.2s,border-color 0.2s; text-align:center; }
+  .btn-scorecard:hover { background:rgba(82,183,136,0.25); border-color:rgba(82,183,136,0.7); }
+  .scorecard-panel { margin-top:14px; background:rgba(0,0,0,0.22); border:1px solid rgba(82,183,136,0.25); border-radius:6px; overflow:hidden; animation:slide-down 0.22s ease; }
+  .scorecard-header { display:flex; align-items:center; gap:8px; padding:10px 14px; background:rgba(82,183,136,0.1); border-bottom:1px solid rgba(82,183,136,0.2); }
+  .scorecard-title { font-family:'Playfair Display',serif; font-size:clamp(0.82rem,2vw,0.95rem); font-weight:700; color:var(--light-green); flex:1; }
+  .live-dot { font-size:.65rem; color:#52b788; animation:sc-pulse 2s infinite; letter-spacing:.05em; }
+  @keyframes sc-pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+  .btn-close-sc { background:none; border:none; color:rgba(255,255,255,.45); cursor:pointer; font-size:1rem; padding:2px 8px; line-height:1; }
+  .btn-close-sc:hover { color:#fff; }
+  .scorecard-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .scorecard-table { border-collapse:collapse; font-size:clamp(.62rem,1.3vw,.72rem); width:100%; white-space:nowrap; }
+  .scorecard-table th { background:rgba(82,183,136,0.1); color:var(--light-green); font-weight:700; padding:5px 3px; text-align:center; border-bottom:1px solid rgba(82,183,136,0.2); min-width:28px; }
+  .scorecard-table td { padding:3px 2px; text-align:center; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .scorecard-table tbody tr:hover { background:rgba(255,255,255,0.03); }
+  .sc-label-th { text-align:left !important; padding-left:10px !important; min-width:130px; }
+  .sc-label-td { text-align:left !important; padding:4px 8px !important; min-width:130px; max-width:180px; overflow:hidden; text-overflow:ellipsis; color:var(--pale-green); }
+  .sc-sub-th { background:rgba(212,168,83,0.12) !important; color:var(--sand) !important; min-width:32px; }
+  .sc-sub-td { background:rgba(212,168,83,0.07); color:var(--sand); font-weight:700; }
+  .sc-tot-th { background:rgba(212,168,83,0.2) !important; color:var(--sand) !important; min-width:36px; }
+  .sc-tot-td { background:rgba(212,168,83,0.14); color:var(--sand); font-weight:700; }
+  .sc-input { width:26px; background:rgba(255,255,255,0.06); border:1px solid rgba(82,183,136,0.18); border-radius:3px; color:#fff; font-size:clamp(.62rem,1.3vw,.72rem); padding:2px 0; text-align:center; -moz-appearance:textfield; font-family:'Courier Prime',monospace; }
+  .sc-input::-webkit-outer-spin-button,.sc-input::-webkit-inner-spin-button{-webkit-appearance:none}
+  .sc-input:focus { outline:none; border-color:rgba(82,183,136,0.65); background:rgba(82,183,136,0.12); }
+
   /* Players modal */
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:var(--pad); animation:fade-in 0.18s ease; }
   .modal-overlay.open { display:flex; }
@@ -631,9 +656,11 @@ function openDateCard(dateStr) {
         <div class="day-form-footer">
           <button class="btn-add-group" onclick="addGroup('${dateStr}')">+ Add Tee Time</button>
           <button class="btn-make-teams" onclick="makeTeams('${dateStr}')">⚔ Make Teams</button>
+          <button class="btn-scorecard" onclick="openScorecard('${dateStr}')">📋 Scorecard</button>
           <button class="btn-remove-group admin-only" style="margin-left:auto;display:${isAdmin()?'':'none'}" onclick="removeDatePlay('${dateStr}')">✕ Remove Date</button>
         </div>
         <div id="teams-${dateStr}"></div>
+        <div id="scorecard-${dateStr}" style="display:none"></div>
       </div>`;
     document.getElementById('calDayCards').appendChild(card);
   } else {
@@ -1624,6 +1651,138 @@ function renderTeams(day,teams,container,totalPlayers,teamSize,randomMode){
     <div class="teams-grid">${teamCardsHtml}</div>
     <div class="teams-method">${method}</div>
   </div>`;
+}
+
+// ── Scorecard ─────────────────────────────────────────────
+const scorecardScores = {}; // { [teeTimeId]: { [hole]: score } }
+let _scorecardDay = null;
+let _scorecardInterval = null;
+const _scoreSaveTimers = {};
+
+async function openScorecard(day) {
+  // Toggle off if already open
+  const el = document.getElementById('scorecard-'+day);
+  if (!el) return;
+  if (el.style.display !== 'none') { closeScorecard(day); return; }
+  _scorecardDay = day;
+  el.style.display = '';
+  await loadScores(day);
+  if (_scorecardInterval) clearInterval(_scorecardInterval);
+  _scorecardInterval = setInterval(() => loadScores(_scorecardDay), 10000);
+  el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function closeScorecard(day) {
+  const el = document.getElementById('scorecard-'+(day||_scorecardDay));
+  if (el) el.style.display = 'none';
+  if (_scorecardInterval) { clearInterval(_scorecardInterval); _scorecardInterval = null; }
+  _scorecardDay = null;
+}
+
+async function loadScores(day) {
+  if (!day) return;
+  try {
+    const scores = await apiFetch('GET', `/scores?date=${day}`);
+    scores.forEach(s => {
+      if (!scorecardScores[s.tee_time_id]) scorecardScores[s.tee_time_id] = {};
+      scorecardScores[s.tee_time_id][s.hole] = s.score;
+    });
+    // Don't re-render if user is actively typing in a score cell
+    const active = document.activeElement;
+    if (!active || !active.classList.contains('sc-input')) {
+      renderScorecard(day);
+    }
+  } catch(e) { console.error('loadScores:', e); }
+}
+
+function renderScorecard(day) {
+  const el = document.getElementById('scorecard-'+day);
+  if (!el || el.style.display === 'none') return;
+  const groups = (state[day]&&state[day].groups)||[];
+  if (!groups.length) {
+    el.innerHTML = '<div class="scorecard-panel"><div style="padding:14px;opacity:.5;font-size:.8rem">No tee times on this date.</div></div>';
+    return;
+  }
+
+  const holeNums = Array.from({length:18}, (_,i) => i+1);
+
+  const headerFront = holeNums.slice(0,9).map(h=>`<th>${h}</th>`).join('');
+  const headerBack  = holeNums.slice(9).map(h=>`<th>${h}</th>`).join('');
+
+  const bodyRows = groups.map((g, gi) => {
+    const sc    = g.apiId ? (scorecardScores[g.apiId]||{}) : {};
+    const names = (g.players||[]).map(p=>p.name.split(' ')[0]).join(', ') || `Group ${gi+1}`;
+    const label = g.time ? `${formatTime(g.time)} — ${names}` : names;
+
+    let front=0, back=0;
+    const cells = holeNums.map(h => {
+      const v = sc[h];
+      if (h <= 9 && v != null) front += v;
+      if (h > 9  && v != null) back  += v;
+      const apiId = g.apiId || '';
+      return `<td class="sc-cell"><input type="number" class="sc-input" id="sci-${apiId}-${h}" min="1" max="20" value="${v!=null?v:''}" onchange="saveScore('${apiId}','${h}',this.value)" /></td>`;
+    });
+    const out   = cells.slice(0,9).join('');
+    const inp   = cells.slice(9).join('');
+    const total = front + back;
+
+    return `<tr>
+      <td class="sc-label-td" title="${label}">${label}</td>
+      ${out}
+      <td class="sc-sub-td" id="sc-out-${g.apiId||gi}">${front||''}</td>
+      ${inp}
+      <td class="sc-sub-td" id="sc-in-${g.apiId||gi}">${back||''}</td>
+      <td class="sc-tot-td" id="sc-tot-${g.apiId||gi}">${total||''}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `<div class="scorecard-panel">
+    <div class="scorecard-header">
+      <span class="scorecard-title">📋 Scorecard</span>
+      <span class="live-dot">● LIVE</span>
+      <button class="btn-close-sc" onclick="closeScorecard('${day}')">✕</button>
+    </div>
+    <div class="scorecard-scroll">
+      <table class="scorecard-table">
+        <thead>
+          <tr>
+            <th class="sc-label-th">Group</th>
+            ${headerFront}
+            <th class="sc-sub-th">OUT</th>
+            ${headerBack}
+            <th class="sc-sub-th">IN</th>
+            <th class="sc-tot-th">TOT</th>
+          </tr>
+        </thead>
+        <tbody>${bodyRows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function saveScore(teeTimeApiId, hole, rawValue) {
+  if (!teeTimeApiId) return;
+  const score = rawValue === '' ? null : parseInt(rawValue);
+  const key = `${teeTimeApiId}_${hole}`;
+  clearTimeout(_scoreSaveTimers[key]);
+  _scoreSaveTimers[key] = setTimeout(async () => {
+    try {
+      await apiFetch('PUT', `/tee-times/${teeTimeApiId}/scores/${hole}`, { score });
+      if (!scorecardScores[teeTimeApiId]) scorecardScores[teeTimeApiId] = {};
+      scorecardScores[teeTimeApiId][hole] = score;
+      // Update totals without full re-render
+      const sc = scorecardScores[teeTimeApiId];
+      let front=0, back=0;
+      for (let h=1;h<=9;h++)  if (sc[h]!=null) front+=sc[h];
+      for (let h=10;h<=18;h++) if (sc[h]!=null) back+=sc[h];
+      const outEl  = document.getElementById('sc-out-'+teeTimeApiId);
+      const inEl   = document.getElementById('sc-in-' +teeTimeApiId);
+      const totEl  = document.getElementById('sc-tot-'+teeTimeApiId);
+      if (outEl) outEl.textContent = front||'';
+      if (inEl)  inEl.textContent  = back||'';
+      if (totEl) totEl.textContent = (front+back)||'';
+    } catch(e) { console.error('saveScore:', e); }
+  }, 600);
 }
 
 // ── Init ──────────────────────────────────────────────────
