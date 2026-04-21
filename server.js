@@ -419,6 +419,18 @@ app.post('/api/teams', async (req, res) => {
   } finally { client.release(); }
 });
 
+app.delete('/api/player-scores', requireAuth, async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required' });
+  try {
+    await pool.query(`
+      DELETE FROM player_scores
+      WHERE team_id IN (SELECT id FROM day_teams WHERE date = $1::date)
+    `, [date]);
+    res.status(204).send();
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/team-scores', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required' });
