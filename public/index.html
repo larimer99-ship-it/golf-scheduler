@@ -1651,16 +1651,32 @@ function renderTeams(day,teams,container,totalPlayers,teamSize,randomMode){
     <div class="teams-grid">${teamCardsHtml}</div>
     <div class="teams-method">${method}</div>
   </div>`;
+  // Persist teams to DB so scorecard can use them
+  saveTeamsToDB(day, teams);
+}
+
+async function saveTeamsToDB(day, teams) {
+  try {
+    const payload = teams.map(t => ({
+      name:    t.name,
+      color:   t.color,
+      players: t.players.map(p => p.name),
+    }));
+    const saved = await apiFetch('POST', '/teams', { date: day, teams: payload });
+    savedTeams[day] = saved;
+    // Refresh scorecard if it's open for this day
+    if (_scorecardDay === day) await loadScores(day);
+  } catch(e) { console.error('saveTeamsToDB:', e); }
 }
 
 // ── Scorecard ─────────────────────────────────────────────
-const scorecardScores = {}; // { [teeTimeId]: { [hole]: score } }
-let _scorecardDay = null;
+const savedTeams    = {}; // { [day]: [{id, name, color, players}] }
+const teamScoreData = {}; // { [teamId]: { [hole]: score } }
+let _scorecardDay      = null;
 let _scorecardInterval = null;
 const _scoreSaveTimers = {};
 
 async function openScorecard(day) {
-  // Toggle off if already open
   const el = document.getElementById('scorecard-'+day);
   if (!el) return;
   if (el.style.display !== 'none') { closeScorecard(day); return; }
@@ -1682,57 +1698,64 @@ function closeScorecard(day) {
 async function loadScores(day) {
   if (!day) return;
   try {
-    const scores = await apiFetch('GET', `/scores?date=${day}`);
+    const [teams, scores] = await Promise.all([
+      apiFetch('GET', `/teams?date=${day}`),
+      apiFetch('GET', `/team-scores?date=${day}`),
+    ]);
+    savedTeams[day] = teams;
     scores.forEach(s => {
-      if (!scorecardScores[s.tee_time_id]) scorecardScores[s.tee_time_id] = {};
-      scorecardScores[s.tee_time_id][s.hole] = s.score;
+      if (!teamScoreData[s.team_id]) teamScoreData[s.team_id] = {};
+      teamScoreData[s.team_id][s.hole] = s.score;
     });
-    // Don't re-render if user is actively typing in a score cell
     const active = document.activeElement;
-    if (!active || !active.classList.contains('sc-input')) {
-      renderScorecard(day);
-    }
+    if (!active || !active.classList.contains('sc-input')) renderScorecard(day);
   } catch(e) { console.error('loadScores:', e); }
 }
 
 function renderScorecard(day) {
   const el = document.getElementById('scorecard-'+day);
   if (!el || el.style.display === 'none') return;
-  const groups = (state[day]&&state[day].groups)||[];
-  if (!groups.length) {
-    el.innerHTML = '<div class="scorecard-panel"><div style="padding:14px;opacity:.5;font-size:.8rem">No tee times on this date.</div></div>';
+  const teams = savedTeams[day] || [];
+
+  if (!teams.length) {
+    el.innerHTML = `<div class="scorecard-panel">
+      <div class="scorecard-header">
+        <span class="scorecard-title">📋 Scorecard</span>
+        <button class="btn-close-sc" onclick="closeScorecard('${day}')">✕</button>
+      </div>
+      <div style="padding:14px 16px;opacity:.6;font-size:.8rem;font-style:italic">
+        Use ⚔ Make Teams to create teams — scores will appear here.
+      </div>
+    </div>`;
     return;
   }
 
-  const holeNums = Array.from({length:18}, (_,i) => i+1);
-
+  const holeNums    = Array.from({length:18}, (_,i) => i+1);
   const headerFront = holeNums.slice(0,9).map(h=>`<th>${h}</th>`).join('');
   const headerBack  = holeNums.slice(9).map(h=>`<th>${h}</th>`).join('');
 
-  const bodyRows = groups.map((g, gi) => {
-    const sc    = g.apiId ? (scorecardScores[g.apiId]||{}) : {};
-    const names = (g.players||[]).map(p=>p.name.split(' ')[0]).join(', ') || `Group ${gi+1}`;
-    const label = g.time ? `${formatTime(g.time)} — ${names}` : names;
-
+  const bodyRows = teams.map(team => {
+    const sc      = teamScoreData[team.id] || {};
+    const players = Array.isArray(team.players) ? team.players.join(', ') : '';
     let front=0, back=0;
     const cells = holeNums.map(h => {
       const v = sc[h];
       if (h <= 9 && v != null) front += v;
       if (h > 9  && v != null) back  += v;
-      const apiId = g.apiId || '';
-      return `<td class="sc-cell"><input type="number" class="sc-input" id="sci-${apiId}-${h}" min="1" max="20" value="${v!=null?v:''}" onchange="saveScore('${apiId}','${h}',this.value)" /></td>`;
+      return `<td><input type="number" class="sc-input" id="sci-${team.id}-${h}" min="1" max="20" value="${v!=null?v:''}" onchange="saveScore('${team.id}','${h}',this.value)" /></td>`;
     });
-    const out   = cells.slice(0,9).join('');
-    const inp   = cells.slice(9).join('');
     const total = front + back;
-
+    const ns = team.color ? `color:${team.color};font-weight:700` : 'font-weight:700';
     return `<tr>
-      <td class="sc-label-td" title="${label}">${label}</td>
-      ${out}
-      <td class="sc-sub-td" id="sc-out-${g.apiId||gi}">${front||''}</td>
-      ${inp}
-      <td class="sc-sub-td" id="sc-in-${g.apiId||gi}">${back||''}</td>
-      <td class="sc-tot-td" id="sc-tot-${g.apiId||gi}">${total||''}</td>
+      <td class="sc-label-td">
+        <span style="${ns}">${team.name}</span>
+        ${players ? `<br><span style="opacity:.55;font-size:.85em">${players}</span>` : ''}
+      </td>
+      ${cells.slice(0,9).join('')}
+      <td class="sc-sub-td" id="sc-out-${team.id}">${front||''}</td>
+      ${cells.slice(9).join('')}
+      <td class="sc-sub-td" id="sc-in-${team.id}">${back||''}</td>
+      <td class="sc-tot-td" id="sc-tot-${team.id}">${total||''}</td>
     </tr>`;
   }).join('');
 
@@ -1746,7 +1769,7 @@ function renderScorecard(day) {
       <table class="scorecard-table">
         <thead>
           <tr>
-            <th class="sc-label-th">Group</th>
+            <th class="sc-label-th">Team</th>
             ${headerFront}
             <th class="sc-sub-th">OUT</th>
             ${headerBack}
@@ -1760,24 +1783,23 @@ function renderScorecard(day) {
   </div>`;
 }
 
-function saveScore(teeTimeApiId, hole, rawValue) {
-  if (!teeTimeApiId) return;
+function saveScore(teamId, hole, rawValue) {
   const score = rawValue === '' ? null : parseInt(rawValue);
-  const key = `${teeTimeApiId}_${hole}`;
+  const key   = `${teamId}_${hole}`;
   clearTimeout(_scoreSaveTimers[key]);
   _scoreSaveTimers[key] = setTimeout(async () => {
     try {
-      await apiFetch('PUT', `/tee-times/${teeTimeApiId}/scores/${hole}`, { score });
-      if (!scorecardScores[teeTimeApiId]) scorecardScores[teeTimeApiId] = {};
-      scorecardScores[teeTimeApiId][hole] = score;
-      // Update totals without full re-render
-      const sc = scorecardScores[teeTimeApiId];
+      await apiFetch('PUT', `/teams/${teamId}/scores/${hole}`, { score });
+      if (!teamScoreData[teamId]) teamScoreData[teamId] = {};
+      teamScoreData[teamId][hole] = score;
+      // Update subtotals without full re-render
+      const sc = teamScoreData[teamId];
       let front=0, back=0;
-      for (let h=1;h<=9;h++)  if (sc[h]!=null) front+=sc[h];
-      for (let h=10;h<=18;h++) if (sc[h]!=null) back+=sc[h];
-      const outEl  = document.getElementById('sc-out-'+teeTimeApiId);
-      const inEl   = document.getElementById('sc-in-' +teeTimeApiId);
-      const totEl  = document.getElementById('sc-tot-'+teeTimeApiId);
+      for (let h=1;  h<=9;  h++) if (sc[h]!=null) front+=sc[h];
+      for (let h=10; h<=18; h++) if (sc[h]!=null) back +=sc[h];
+      const outEl = document.getElementById('sc-out-'+teamId);
+      const inEl  = document.getElementById('sc-in-' +teamId);
+      const totEl = document.getElementById('sc-tot-'+teamId);
       if (outEl) outEl.textContent = front||'';
       if (inEl)  inEl.textContent  = back||'';
       if (totEl) totEl.textContent = (front+back)||'';

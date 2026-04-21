@@ -357,6 +357,95 @@ app.put('/api/tee-times/:id/players/:playerId', async (req, res) => {
   }
 });
 
+// ─── Teams (persisted) ───────────────────────────────────────────────────────
+
+pool.query(`
+  CREATE TABLE IF NOT EXISTS day_teams (
+    id         SERIAL PRIMARY KEY,
+    date       DATE NOT NULL,
+    name       TEXT NOT NULL,
+    color      TEXT,
+    players    JSONB DEFAULT '[]',
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  CREATE TABLE IF NOT EXISTS team_scores (
+    id         SERIAL PRIMARY KEY,
+    team_id    INTEGER NOT NULL REFERENCES day_teams(id) ON DELETE CASCADE,
+    hole       INTEGER NOT NULL CHECK (hole BETWEEN 1 AND 18),
+    score      INTEGER,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(team_id, hole)
+  );
+`).catch(err => console.error('day_teams/team_scores init:', err));
+
+app.get('/api/teams', async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM day_teams WHERE date = $1::date ORDER BY sort_order, id',
+      [date]
+    );
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/teams', async (req, res) => {
+  const { date, teams } = req.body;
+  if (!date || !Array.isArray(teams)) return res.status(400).json({ error: 'date and teams[] required' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM day_teams WHERE date = $1::date', [date]);
+    const rows = [];
+    for (let i = 0; i < teams.length; i++) {
+      const { name, color, players } = teams[i];
+      const { rows: r } = await client.query(
+        'INSERT INTO day_teams (date, name, color, players, sort_order) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+        [date, name, color || null, JSON.stringify(players || []), i]
+      );
+      rows.push(r[0]);
+    }
+    await client.query('COMMIT');
+    res.status(201).json(rows);
+  } catch(err) {
+    await client.query('ROLLBACK');
+    res.status(500).json({ error: err.message });
+  } finally { client.release(); }
+});
+
+app.get('/api/team-scores', async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required' });
+  try {
+    const { rows } = await pool.query(`
+      SELECT ts.*, dt.name AS team_name, dt.color AS team_color
+      FROM team_scores ts
+      JOIN day_teams dt ON dt.id = ts.team_id
+      WHERE dt.date = $1::date
+      ORDER BY dt.sort_order, ts.hole
+    `, [date]);
+    res.json(rows);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/teams/:id/scores/:hole', async (req, res) => {
+  const teamId = parseInt(req.params.id);
+  const hole   = parseInt(req.params.hole);
+  const { score } = req.body;
+  if (hole < 1 || hole > 18) return res.status(400).json({ error: 'hole must be 1-18' });
+  try {
+    const { rows } = await pool.query(`
+      INSERT INTO team_scores (team_id, hole, score)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (team_id, hole) DO UPDATE SET score = EXCLUDED.score, updated_at = NOW()
+      RETURNING *
+    `, [teamId, hole, score ?? null]);
+    res.json(rows[0]);
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 // ─── Hole Scores ─────────────────────────────────────────────────────────────
 
 pool.query(`
