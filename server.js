@@ -391,8 +391,12 @@ app.get('/api/teams', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// Ensure best_balls column exists (safe migration)
+pool.query(`ALTER TABLE day_teams ADD COLUMN IF NOT EXISTS best_balls INTEGER DEFAULT 1`)
+  .catch(err => console.error('day_teams migrate best_balls:', err));
+
 app.post('/api/teams', async (req, res) => {
-  const { date, teams } = req.body;
+  const { date, teams, best_balls } = req.body;
   if (!date || !Array.isArray(teams)) return res.status(400).json({ error: 'date and teams[] required' });
   const client = await pool.connect();
   try {
@@ -402,8 +406,8 @@ app.post('/api/teams', async (req, res) => {
     for (let i = 0; i < teams.length; i++) {
       const { name, color, players } = teams[i];
       const { rows: r } = await client.query(
-        'INSERT INTO day_teams (date, name, color, players, sort_order) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-        [date, name, color || null, JSON.stringify(players || []), i]
+        'INSERT INTO day_teams (date, name, color, players, sort_order, best_balls) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
+        [date, name, color || null, JSON.stringify(players || []), i, best_balls || 1]
       );
       rows.push(r[0]);
     }

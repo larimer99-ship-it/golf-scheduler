@@ -229,6 +229,7 @@
   .btn-team-size.disabled-size { opacity:0.3; cursor:not-allowed; pointer-events:none; }
   .btn-cancel-teams { background:none; border:none; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.65rem,1.4vw,0.72rem); opacity:0.65; text-align:right; padding:2px 0; transition:opacity 0.15s; }
   .btn-cancel-teams:hover { opacity:1; }
+  .btn-team-size.format-active { background:rgba(82,183,136,0.25); border-color:rgba(82,183,136,0.7); color:var(--light-green); }
 
   /* Scorecard */
   .btn-scorecard { flex:1; background:rgba(82,183,136,0.12); border:1px solid rgba(82,183,136,0.35); border-radius:6px; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); font-weight:700; letter-spacing:0.08em; padding:clamp(8px,1.5vw,11px); transition:background 0.2s,border-color 0.2s; text-align:center; }
@@ -1590,29 +1591,43 @@ function qaClose(){document.getElementById('qaModal').classList.remove('open');_
 const TEAM_COLORS=['#3498db','#e74c3c','#2ecc71','#9b59b6','#f39c12','#1abc9c','#e91e8c','#f0c520'];
 const TEAM_NAMES =['Team A','Team B','Team C','Team D','Team E','Team F'];
 
-function makeTeams(day,teamSize,randomMode){
-  const container=document.getElementById('teams-'+day);
-  const allPlayers=[];
+const _pendingFormat = {}; // { [day]: number } best balls count pending selection
+
+function makeTeams(day, teamSize, randomMode, bestBalls) {
+  const container = document.getElementById('teams-'+day);
+  const allPlayers = [];
   (state[day].groups||[]).forEach(g=>(g.players||[]).forEach(p=>{
-    const tee=p.selectedTee?teeState.tees.find(t=>String(t.apiId||t.id)===p.selectedTee):null;
-    const hcp=calcHcp(p.handicap,tee);
-    allPlayers.push({name:p.name,handicap:p.handicap,playingHcp:hcp,teeColor:tee?tee.color:null,
+    const tee = p.selectedTee ? teeState.tees.find(t=>String(t.apiId||t.id)===p.selectedTee) : null;
+    const hcp = calcHcp(p.handicap, tee);
+    allPlayers.push({name:p.name, handicap:p.handicap, playingHcp:hcp, teeColor:tee?tee.color:null,
       sortHcp:hcp!==null?hcp:(p.handicap!==''&&p.handicap!=null?parseFloat(p.handicap):999)});
   }));
-  if (allPlayers.length<2){showToast('Need at least 2 players to make teams.');return;}
-  if (!teamSize){showTeamSizePicker(day,allPlayers.length,container);return;}
-  renderTeams(day,randomMode?buildRandomTeams(allPlayers,teamSize):buildBalancedTeams(allPlayers,teamSize),container,allPlayers.length,teamSize,randomMode);
+  if (allPlayers.length < 2) { showToast('Need at least 2 players to make teams.'); return; }
+  if (!teamSize) { showTeamSizePicker(day, allPlayers.length, container); return; }
+  const bb = bestBalls ?? _pendingFormat[day] ?? 1;
+  renderTeams(day, randomMode?buildRandomTeams(allPlayers,teamSize):buildBalancedTeams(allPlayers,teamSize), container, allPlayers.length, teamSize, randomMode, bb);
 }
 
-function showTeamSizePicker(day,playerCount,container){
-  const btnHtml=[2,3,4].map(s=>{
-    const n=Math.ceil(playerCount/s);
+function selectBestBalls(day, n) {
+  _pendingFormat[day] = n;
+  document.querySelectorAll(`#teams-${day} .btn-bb`).forEach((b,i) => b.classList.toggle('format-active', i+1===n));
+}
+
+function showTeamSizePicker(day, playerCount, container) {
+  const fmt = _pendingFormat[day] || 1;
+  const fmtBtns = [1,2,3].map(n =>
+    `<button class="btn-team-size btn-bb${n===fmt?' format-active':''}" onclick="selectBestBalls('${day}',${n})">${n} Best Ball${n>1?'s':''}</button>`
+  ).join('');
+  const sizeBtns = [2,3,4].map(s => {
+    const n = Math.ceil(playerCount/s);
     return `<button class="btn-team-size${playerCount<s?' disabled-size':''}" onclick="makeTeams('${day}',${s})">${s} players<br><span style="font-size:.7em;opacity:.6">${n} team${n!==1?'s':''}</span></button>`;
   }).join('');
   container.innerHTML=`<div class="team-size-picker">
-    <div class="team-size-label">⚔ Team Size</div>
-    <div class="team-size-hint">${playerCount} player${playerCount!==1?'s':''} · choose how many per team</div>
-    <div class="team-size-btns">${btnHtml}</div>
+    <div class="team-size-label">⚔ Team Setup</div>
+    <div class="team-size-hint">Best scores counted per hole</div>
+    <div class="team-size-btns">${fmtBtns}</div>
+    <div class="team-size-hint" style="margin-top:12px">${playerCount} player${playerCount!==1?'s':''} · choose how many per team</div>
+    <div class="team-size-btns">${sizeBtns}</div>
     <button class="btn-cancel-teams" onclick="document.getElementById('teams-${day}').innerHTML=''">✕ Cancel</button>
   </div>`;
 }
@@ -1635,9 +1650,11 @@ function buildRandomTeams(players,teamSize){
   s.forEach((p,i)=>teams[i%n].players.push(p));return teams;
 }
 
-function renderTeams(day,teams,container,totalPlayers,teamSize,randomMode){
+function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, bestBalls) {
+  bestBalls = bestBalls || 1;
   const knownHcp=teams.flatMap(t=>t.players).filter(p=>p.playingHcp!==null).length;
   const method=randomMode?'Random draw — handicaps not considered':knownHcp===totalPlayers?'Balanced by playing handicap':knownHcp>0?'Balanced by available handicaps (some players missing index/tee)':'Random — add handicap indexes & select tees for handicap-based teams';
+  const bbLabel = `${bestBalls} Best Ball${bestBalls>1?'s':''}`;
   const teamCardsHtml=teams.map(team=>{
     const hasAllHcp=team.players.every(p=>p.playingHcp!==null);
     const teamTotal=team.players.reduce((s,p)=>s+(p.playingHcp!==null?p.playingHcp:0),0);
@@ -1653,22 +1670,21 @@ function renderTeams(day,teams,container,totalPlayers,teamSize,randomMode){
   }).join('');
   container.innerHTML=`<div class="teams-panel">
     <div class="teams-panel-header">
-      <span class="teams-panel-title">⚔ Teams</span>
+      <span class="teams-panel-title">⚔ Teams · ${bbLabel}</span>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},false)">↺ HCP</button>
-        <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},true)">🎲 Random</button>
-        <button class="btn-reshuffle" onclick="makeTeams('${day}')">⊞ Size</button>
+        <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},false,${bestBalls})">↺ HCP</button>
+        <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},true,${bestBalls})">🎲 Random</button>
+        <button class="btn-reshuffle" onclick="makeTeams('${day}')">⊞ Setup</button>
         <button class="btn-close-teams" onclick="document.getElementById('teams-${day}').innerHTML=''">✕</button>
       </div>
     </div>
     <div class="teams-grid">${teamCardsHtml}</div>
     <div class="teams-method">${method}</div>
   </div>`;
-  // Persist teams to DB so scorecard can use them
-  saveTeamsToDB(day, teams);
+  saveTeamsToDB(day, teams, bestBalls);
 }
 
-async function saveTeamsToDB(day, teams) {
+async function saveTeamsToDB(day, teams, bestBalls) {
   try {
     const payload = teams.map(t => ({
       name:    t.name,
@@ -1679,7 +1695,7 @@ async function saveTeamsToDB(day, teams) {
         playingHcp: p.playingHcp ?? null,
       })),
     }));
-    const saved = await apiFetch('POST', '/teams', { date: day, teams: payload });
+    const saved = await apiFetch('POST', '/teams', { date: day, teams: payload, best_balls: bestBalls || 1 });
     savedTeams[day] = saved;
     if (_scorecardDay === day) await loadScores(day);
   } catch(e) { console.error('saveTeamsToDB:', e); }
@@ -1807,30 +1823,32 @@ function renderScorecard(day) {
       </tr>`;
     });
 
-    // Team score row — best net per hole
+    // Team score row — N best net scores per hole summed
+    const bb = team.best_balls || 1;
+    const bbLabel = `${bb} Best Ball${bb>1?'s':''}`;
     let tsF=0, tsB=0, tsFc=0, tsBc=0;
     const tsCells = holeNums.map(h => {
-      const hSI   = si[h] || null;
-      let bestNet = null;
+      const hSI  = si[h] || null;
+      const nets = [];
       players.forEach(player => {
         const pName = typeof player === 'string' ? player : player.name;
         const phcp  = typeof player === 'object' ? player.playingHcp : null;
         const gross = (playerScoreData[team.id]||{})[pName]?.[h];
         if (gross == null) return;
-        const net = gross - strokesOnHole(phcp, hSI);
-        if (bestNet === null || net < bestNet) bestNet = net;
+        nets.push(gross - strokesOnHole(phcp, hSI));
       });
-      if (bestNet !== null) {
-        if (h<=9)  { tsF+=bestNet; tsFc++; }
-        else       { tsB+=bestNet; tsBc++; }
-      }
-      return `<td class="sc-team-score-td" id="sc-ts-${team.id}-${h}">${bestNet!=null?bestNet:''}</td>`;
+      if (!nets.length) return `<td class="sc-team-score-td" id="sc-ts-${team.id}-${h}"></td>`;
+      nets.sort((a,b)=>a-b);
+      const teamScore = nets.slice(0, Math.min(bb, nets.length)).reduce((s,v)=>s+v, 0);
+      if (h<=9)  { tsF+=teamScore; tsFc++; }
+      else       { tsB+=teamScore; tsBc++; }
+      return `<td class="sc-team-score-td" id="sc-ts-${team.id}-${h}">${teamScore}</td>`;
     });
 
     return `<tr><td class="sc-label-td sc-team-header-td" colspan="22" style="color:${tc};border-top-color:${tc}44">${team.name}</td></tr>
       ${playerRows.join('')}
       <tr class="sc-team-score-row">
-        <td class="sc-label-td sc-team-score-label" style="color:${tc}">Team Score</td>
+        <td class="sc-label-td sc-team-score-label" style="color:${tc}">Team Score <span style="opacity:.55;font-weight:400">(${bbLabel})</span></td>
         ${tsCells.slice(0,9).join('')}
         <td class="sc-sub-td" id="sc-tsout-${team.id}">${tsFc?tsF:''}</td>
         ${tsCells.slice(9).join('')}
@@ -1906,33 +1924,39 @@ function savePlayerScore(teamId, playerName, hole, rawValue) {
       const teams = savedTeams[day] || [];
       const team  = teams.find(t => String(t.id) === String(teamId));
       if (!team) return;
-      const si    = globalHoleSI[hole] || null;
+      const hSI0   = globalHoleSI[hole] || null;
       const players = Array.isArray(team.players) ? team.players : [];
-      let bestNet = null;
-      players.forEach(player => {
-        const pN   = typeof player==='string'?player:player.name;
-        const phcp = typeof player==='object'?player.playingHcp:null;
-        const gross= (playerScoreData[teamId]||{})[pN]?.[hole];
-        if (gross==null) return;
-        const net  = gross - strokesOnHole(phcp, si);
-        if (bestNet===null || net<bestNet) bestNet=net;
+      const bb = team.best_balls || 1;
+      // Update team score cell for this hole
+      const nets0 = [];
+      players.forEach(player=>{
+        const pN=typeof player==='string'?player:player.name;
+        const phcp=typeof player==='object'?player.playingHcp:null;
+        const gross=(playerScoreData[teamId]||{})[pN]?.[hole];
+        if(gross==null)return;
+        nets0.push(gross-strokesOnHole(phcp,hSI0));
       });
       const tsEl=document.getElementById(`sc-ts-${teamId}-${hole}`);
-      if(tsEl) tsEl.textContent=bestNet!=null?bestNet:'';
+      if(tsEl){
+        if(nets0.length){nets0.sort((a,b)=>a-b);tsEl.textContent=nets0.slice(0,Math.min(bb,nets0.length)).reduce((s,v)=>s+v,0);}
+        else tsEl.textContent='';
+      }
       // Update team subtotals
       let tsF=0,tsB=0,tsFc=0,tsBc=0;
       for (let h=1; h<=18; h++) {
         const hSI=globalHoleSI[h]||null;
-        let bn=null;
+        const nets=[];
         players.forEach(player=>{
           const pN=typeof player==='string'?player:player.name;
           const phcp=typeof player==='object'?player.playingHcp:null;
           const gross=(playerScoreData[teamId]||{})[pN]?.[h];
           if(gross==null)return;
-          const net=gross-strokesOnHole(phcp,hSI);
-          if(bn===null||net<bn)bn=net;
+          nets.push(gross-strokesOnHole(phcp,hSI));
         });
-        if(bn!==null){if(h<=9){tsF+=bn;tsFc++;}else{tsB+=bn;tsBc++;}}
+        if(!nets.length)continue;
+        nets.sort((a,b)=>a-b);
+        const ts=nets.slice(0,Math.min(bb,nets.length)).reduce((s,v)=>s+v,0);
+        if(h<=9){tsF+=ts;tsFc++;}else{tsB+=ts;tsBc++;}
       }
       const to=document.getElementById(`sc-tsout-${teamId}`);
       const ti=document.getElementById(`sc-tsin-${teamId}`);
