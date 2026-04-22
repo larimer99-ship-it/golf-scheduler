@@ -647,6 +647,31 @@ app.put('/api/tee-times/:id/scores/:hole', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+// ─── Daily cleanup: delete today's tee times at 11:59 PM (server UTC) ────────
+
+function scheduleDailyCleanup() {
+  const now  = new Date();
+  const next = new Date(now);
+  next.setHours(23, 59, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1); // already past — use tomorrow
+  const delay = next - now;
+  setTimeout(async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const { rowCount } = await pool.query(
+        "DELETE FROM tee_times WHERE tee_time::date = CURRENT_DATE"
+      );
+      console.log(`[cleanup] ${today}: removed ${rowCount} tee time(s)`);
+    } catch (err) {
+      console.error('[cleanup] Error:', err.message);
+    }
+    scheduleDailyCleanup(); // reschedule for next day
+  }, delay);
+  console.log(`[cleanup] Next tee-time cleanup at ${next.toISOString()}`);
+}
+
+scheduleDailyCleanup();
+
 // ─── Start ───────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
