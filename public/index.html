@@ -230,6 +230,27 @@
   .btn-cancel-teams { background:none; border:none; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.65rem,1.4vw,0.72rem); opacity:0.65; text-align:right; padding:2px 0; transition:opacity 0.15s; }
   .btn-cancel-teams:hover { opacity:1; }
   .btn-team-size.format-active { background:rgba(82,183,136,0.25); border-color:rgba(82,183,136,0.7); color:var(--light-green); }
+  .btn-manual-build { width:100%; background:rgba(255,255,255,0.05); border:1px dashed rgba(212,168,83,0.35); border-radius:6px; color:rgba(212,168,83,0.7); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.7rem,1.5vw,0.78rem); padding:clamp(7px,1.3vw,10px); transition:background 0.18s,border-color 0.18s,color 0.18s; text-align:center; letter-spacing:.05em; }
+  .btn-manual-build:hover { background:rgba(212,168,83,0.1); border-color:rgba(212,168,83,0.6); color:var(--sand); }
+  /* Manual builder */
+  .mb-pool { padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.07); }
+  .mb-pool-label { font-size:clamp(0.6rem,1.3vw,0.67rem); color:var(--pale-green); opacity:0.65; letter-spacing:.07em; margin-bottom:7px; display:flex; align-items:center; gap:8px; }
+  .mb-pool-players { display:flex; flex-wrap:wrap; gap:6px; min-height:28px; }
+  .mb-pool-empty { font-size:clamp(0.65rem,1.4vw,0.72rem); color:var(--light-green); opacity:0.45; font-style:italic; }
+  .mb-player { display:inline-flex; align-items:center; gap:5px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:20px; padding:4px 10px 4px 6px; cursor:pointer; transition:background 0.15s,border-color 0.15s; font-size:clamp(0.67rem,1.5vw,0.76rem); color:var(--cream); user-select:none; }
+  .mb-player:hover { background:rgba(212,168,83,0.15); border-color:rgba(212,168,83,0.45); }
+  .mb-player.mb-selected { background:rgba(212,168,83,0.28); border-color:rgba(212,168,83,0.9); color:var(--sand); font-weight:700; }
+  .mb-player-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .mb-player-hcp { font-size:clamp(0.57rem,1.2vw,0.63rem); opacity:0.55; }
+  .mb-team-slot { background:rgba(255,255,255,0.04); border-radius:5px; padding:10px 12px; border-left:3px solid; transition:background 0.15s; min-height:54px; }
+  .mb-team-slot.mb-target { cursor:pointer; }
+  .mb-team-slot.mb-target:hover { background:rgba(212,168,83,0.1); }
+  .mb-slot-name { font-family:'Playfair Display',serif; font-size:clamp(0.75rem,1.7vw,0.84rem); font-weight:700; margin-bottom:6px; }
+  .mb-slot-list { display:flex; flex-direction:column; gap:3px; }
+  .mb-slot-hint { font-size:clamp(0.57rem,1.2vw,0.63rem); color:var(--light-green); opacity:0.38; margin-top:5px; }
+  .mb-actions { display:flex; gap:8px; padding:10px 14px; border-top:1px solid rgba(255,255,255,0.07); align-items:center; }
+  .btn-confirm-teams { flex:1; background:rgba(82,183,136,0.2); border:1px solid rgba(82,183,136,0.5); border-radius:6px; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); font-weight:700; letter-spacing:0.06em; padding:clamp(7px,1.4vw,10px); transition:background 0.18s; }
+  .btn-confirm-teams:hover { background:rgba(82,183,136,0.35); }
 
   /* Scorecard */
   .btn-scorecard { flex:1; background:rgba(82,183,136,0.12); border:1px solid rgba(82,183,136,0.35); border-radius:6px; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); font-weight:700; letter-spacing:0.08em; padding:clamp(8px,1.5vw,11px); transition:background 0.2s,border-color 0.2s; text-align:center; }
@@ -1608,16 +1629,22 @@ const TEAM_COLORS=['#3498db','#e74c3c','#2ecc71','#9b59b6','#f39c12','#1abc9c','
 const TEAM_NAMES =['Team A','Team B','Team C','Team D','Team E','Team F'];
 
 const _pendingFormat = {}; // { [day]: number } best balls count pending selection
+const _manualState   = {}; // { [day]: { teams, unassigned, selected, bestBalls } }
 
-function makeTeams(day, teamSize, randomMode, bestBalls) {
-  const container = document.getElementById('teams-'+day);
-  const allPlayers = [];
+function getAllPlayersForDay(day) {
+  const all = [];
   (state[day].groups||[]).forEach(g=>(g.players||[]).forEach(p=>{
     const tee = p.selectedTee ? teeState.tees.find(t=>String(t.apiId||t.id)===p.selectedTee) : null;
     const hcp = calcHcp(p.handicap, tee);
-    allPlayers.push({name:p.name, handicap:p.handicap, playingHcp:hcp, teeColor:tee?tee.color:null,
+    all.push({name:p.name, handicap:p.handicap, playingHcp:hcp, teeColor:tee?tee.color:null,
       sortHcp:hcp!==null?hcp:(p.handicap!==''&&p.handicap!=null?parseFloat(p.handicap):999)});
   }));
+  return all;
+}
+
+function makeTeams(day, teamSize, randomMode, bestBalls) {
+  const container = document.getElementById('teams-'+day);
+  const allPlayers = getAllPlayersForDay(day);
   if (allPlayers.length < 2) { showToast('Need at least 2 players to make teams.'); return; }
   if (!teamSize) { showTeamSizePicker(day, allPlayers.length, container); return; }
   const bb = bestBalls ?? _pendingFormat[day] ?? 1;
@@ -1644,10 +1671,162 @@ function showTeamSizePicker(day, playerCount, container) {
     <div class="team-size-btns">${fmtBtns}</div>
     <div class="team-size-hint" style="margin-top:12px">${playerCount} player${playerCount!==1?'s':''} · choose how many per team</div>
     <div class="team-size-btns">${sizeBtns}</div>
+    <button class="btn-manual-build" onclick="openManualBuilder('${day}',null,null)">✏ Build Manually — drag &amp; drop players into teams</button>
     <button class="btn-cancel-teams" onclick="document.getElementById('teams-${day}').innerHTML=''">✕ Cancel</button>
   </div>`;
 }
 
+// ── Manual Team Builder ────────────────────────────────────
+function openManualBuilder(day, existingTeams, bestBalls) {
+  const container = document.getElementById('teams-'+day);
+  const allPlayers = getAllPlayersForDay(day);
+  if (allPlayers.length < 2) { showToast('Need at least 2 players.'); return; }
+  const bb = bestBalls || _pendingFormat[day] || 1;
+  let teams, unassigned;
+  if (existingTeams && existingTeams.length) {
+    teams = existingTeams.map(t => ({
+      name: t.name, color: t.color,
+      players: t.players.map(p => allPlayers.find(ap => ap.name === p.name) ||
+        {name:p.name, handicap:p.handicap||null, playingHcp:p.playingHcp||null, teeColor:null, sortHcp:999})
+    }));
+    const assigned = new Set(teams.flatMap(t => t.players.map(p => p.name)));
+    unassigned = allPlayers.filter(p => !assigned.has(p.name));
+  } else {
+    teams = Array.from({length:2}, (_,i) => ({name:TEAM_NAMES[i]||`Team ${i+1}`, color:TEAM_COLORS[i%TEAM_COLORS.length], players:[]}));
+    unassigned = [...allPlayers];
+  }
+  _manualState[day] = { teams, unassigned, selected:null, bestBalls:bb };
+  renderManualBuilder(day, container);
+}
+
+function renderManualBuilder(day, container) {
+  const ms = _manualState[day];
+  if (!ms) return;
+  const bb = ms.bestBalls;
+  const sel = ms.selected;
+  const bbLabel = `${bb} Best Ball${bb>1?'s':''}`;
+
+  const playerPill = (p) => {
+    const isSel = sel === p.name;
+    const dot = p.teeColor ? `background:${p.teeColor}` : 'background:rgba(82,183,136,0.5)';
+    const hcpTxt = p.playingHcp!==null ? ` HCP${p.playingHcp}` : (p.handicap ? ` Idx${p.handicap}` : '');
+    return `<div class="mb-player${isSel?' mb-selected':''}" onclick="event.stopPropagation();selectManualPlayer('${day}','${p.name.replace(/'/g,"\\'")}')">
+      <span class="mb-player-dot" style="${dot}"></span>
+      <span>${p.name}</span>${hcpTxt?`<span class="mb-player-hcp">${hcpTxt}</span>`:''}
+    </div>`;
+  };
+
+  const poolHtml = ms.unassigned.length
+    ? ms.unassigned.map(playerPill).join('')
+    : `<span class="mb-pool-empty">All players assigned</span>`;
+
+  const isMoving = sel !== null;
+  const teamsHtml = ms.teams.map((team, ti) => {
+    const listHtml = team.players.map(playerPill).join('');
+    const hint = isMoving ? 'tap here to place player' : 'tap player to select';
+    return `<div class="mb-team-slot${isMoving?' mb-target':''}" onclick="assignToTeam('${day}',${ti})" style="border-left-color:${team.color}">
+      <div class="mb-slot-name" style="color:${team.color}">${team.name} <span style="font-size:.65em;opacity:.5">(${team.players.length})</span></div>
+      <div class="mb-slot-list">${listHtml}</div>
+      <div class="mb-slot-hint">${hint}</div>
+    </div>`;
+  }).join('');
+
+  const unassignBtn = isMoving
+    ? `<button class="btn-reshuffle" style="font-size:.67rem;padding:2px 9px" onclick="assignToUnassigned('${day}')">→ Unassign</button>`
+    : '';
+  const movingLabel = isMoving
+    ? `<span style="color:var(--sand);font-size:clamp(.6rem,1.3vw,.68rem)">Moving: <b>${sel}</b></span>`
+    : '';
+
+  container.innerHTML = `<div class="teams-panel">
+    <div class="teams-panel-header">
+      <span class="teams-panel-title">✏ Build Teams · ${bbLabel}</span>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <button class="btn-reshuffle" onclick="addManualTeam('${day}')">+ Team</button>
+        <button class="btn-reshuffle" onclick="removeManualTeam('${day}')">− Team</button>
+        <button class="btn-reshuffle" onclick="makeTeams('${day}')">⊞ Setup</button>
+        <button class="btn-close-teams" onclick="document.getElementById('teams-${day}').innerHTML=''">✕</button>
+      </div>
+    </div>
+    <div class="mb-pool">
+      <div class="mb-pool-label">UNASSIGNED ${movingLabel} ${unassignBtn}</div>
+      <div class="mb-pool-players${isMoving?' mb-target':''}" onclick="assignToUnassigned('${day}')">${poolHtml}</div>
+    </div>
+    <div class="teams-grid" style="padding:10px 14px">${teamsHtml}</div>
+    <div class="mb-actions">
+      <button class="btn-confirm-teams" onclick="confirmManualTeams('${day}')">✓ Confirm Teams</button>
+      <button class="btn-cancel-teams" onclick="makeTeams('${day}')">✕ Cancel</button>
+    </div>
+  </div>`;
+}
+
+function selectManualPlayer(day, name) {
+  const ms = _manualState[day];
+  if (!ms) return;
+  ms.selected = ms.selected === name ? null : name;
+  renderManualBuilder(day, document.getElementById('teams-'+day));
+}
+
+function assignToTeam(day, teamIdx) {
+  const ms = _manualState[day];
+  if (!ms || ms.selected === null) return;
+  const name = ms.selected;
+  // Remove from wherever the player currently is
+  let player = null;
+  const ui = ms.unassigned.findIndex(p => p.name === name);
+  if (ui >= 0) { player = ms.unassigned.splice(ui, 1)[0]; }
+  else { for (const t of ms.teams) { const i = t.players.findIndex(p => p.name === name); if (i >= 0) { player = t.players.splice(i, 1)[0]; break; } } }
+  if (player && !ms.teams[teamIdx].players.find(p => p.name === name)) {
+    ms.teams[teamIdx].players.push(player);
+  } else if (!player) { ms.selected = null; }
+  ms.selected = null;
+  renderManualBuilder(day, document.getElementById('teams-'+day));
+}
+
+function assignToUnassigned(day) {
+  const ms = _manualState[day];
+  if (!ms || ms.selected === null) return;
+  const name = ms.selected;
+  for (const t of ms.teams) {
+    const i = t.players.findIndex(p => p.name === name);
+    if (i >= 0) { ms.unassigned.push(t.players.splice(i, 1)[0]); break; }
+  }
+  ms.selected = null;
+  renderManualBuilder(day, document.getElementById('teams-'+day));
+}
+
+function addManualTeam(day) {
+  const ms = _manualState[day];
+  if (!ms) return;
+  const i = ms.teams.length;
+  if (i >= TEAM_COLORS.length) { showToast('Maximum teams reached.'); return; }
+  ms.teams.push({ name: TEAM_NAMES[i]||`Team ${i+1}`, color: TEAM_COLORS[i%TEAM_COLORS.length], players: [] });
+  renderManualBuilder(day, document.getElementById('teams-'+day));
+}
+
+function removeManualTeam(day) {
+  const ms = _manualState[day];
+  if (!ms || ms.teams.length <= 2) { showToast('Minimum 2 teams required.'); return; }
+  const last = ms.teams.pop();
+  ms.unassigned.push(...last.players);
+  ms.selected = null;
+  renderManualBuilder(day, document.getElementById('teams-'+day));
+}
+
+function confirmManualTeams(day) {
+  const ms = _manualState[day];
+  if (!ms) return;
+  const teams = ms.teams.filter(t => t.players.length > 0);
+  if (teams.length < 2) { showToast('Need at least 2 teams with players.'); return; }
+  if (ms.unassigned.length > 0) {
+    if (!confirm(`${ms.unassigned.length} player(s) unassigned — continue without them?`)) return;
+  }
+  const container = document.getElementById('teams-'+day);
+  const totalPlayers = teams.reduce((s, t) => s + t.players.length, 0);
+  renderTeams(day, teams, container, totalPlayers, 0, false, ms.bestBalls);
+}
+
+// ──────────────────────────────────────────────────────────
 function buildBalancedTeams(players,teamSize){
   const sorted=[...players].sort((a,b)=>a.sortHcp-b.sortHcp);
   let i=0;while(i<sorted.length){let j=i;while(j<sorted.length&&sorted[j].sortHcp===sorted[i].sortHcp)j++;for(let k=j-1;k>i;k--){const r=i+Math.floor(Math.random()*(k-i+1));[sorted[k],sorted[r]]=[sorted[r],sorted[k]];}i=j;}
@@ -1669,7 +1848,8 @@ function buildRandomTeams(players,teamSize){
 function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, bestBalls) {
   bestBalls = bestBalls || 1;
   const knownHcp=teams.flatMap(t=>t.players).filter(p=>p.playingHcp!==null).length;
-  const method=randomMode?'Random draw — handicaps not considered':knownHcp===totalPlayers?'Balanced by playing handicap':knownHcp>0?'Balanced by available handicaps (some players missing index/tee)':'Random — add handicap indexes & select tees for handicap-based teams';
+  const isManual = !teamSize;
+  const method=isManual?'Manually built teams':randomMode?'Random draw — handicaps not considered':knownHcp===totalPlayers?'Balanced by playing handicap':knownHcp>0?'Balanced by available handicaps (some players missing index/tee)':'Random — add handicap indexes & select tees for handicap-based teams';
   const bbLabel = `${bestBalls} Best Ball${bestBalls>1?'s':''}`;
   const teamCardsHtml=teams.map(team=>{
     const hasAllHcp=team.players.every(p=>p.playingHcp!==null);
@@ -1684,12 +1864,16 @@ function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, 
       ${hasAllHcp?`<div class="team-total">Combined HCP: ${teamTotal}</div>`:''}
     </div>`;
   }).join('');
+  const reshufflebtns = teamSize
+    ? `<button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},false,${bestBalls})">↺ HCP</button>
+       <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},true,${bestBalls})">🎲 Random</button>`
+    : '';
   container.innerHTML=`<div class="teams-panel">
     <div class="teams-panel-header">
       <span class="teams-panel-title">⚔ Teams · ${bbLabel}</span>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},false,${bestBalls})">↺ HCP</button>
-        <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},true,${bestBalls})">🎲 Random</button>
+        ${reshufflebtns}
+        <button class="btn-reshuffle" onclick="openManualBuilder('${day}',savedTeams['${day}'],${bestBalls})">✏ Edit</button>
         <button class="btn-reshuffle" onclick="makeTeams('${day}')">⊞ Setup</button>
         <button class="btn-close-teams" onclick="document.getElementById('teams-${day}').innerHTML=''">✕</button>
       </div>
