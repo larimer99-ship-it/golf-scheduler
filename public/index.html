@@ -963,6 +963,7 @@ async function saveTeeTime(g, day) {
 function renderDay(day) {
   const container = document.getElementById('groups-' + day);
   container.innerHTML = '';
+  state[day].groups.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   state[day].groups.forEach((g, gi) => renderGroup(day, g, gi, container));
   state[day].groups.forEach(g => renderGroupRoster(day, g));
   const addBtn = document.querySelector(`#form-${day} .btn-add-group`);
@@ -1633,7 +1634,8 @@ const _manualState   = {}; // { [day]: { teams, unassigned, selected, bestBalls 
 
 function getAllPlayersForDay(day) {
   const all = [];
-  (state[day].groups||[]).forEach(g=>(g.players||[]).forEach(p=>{
+  const groups = [...(state[day].groups||[])].sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+  groups.forEach(g=>(g.players||[]).forEach(p=>{
     const tee = p.selectedTee ? teeState.tees.find(t=>String(t.apiId||t.id)===p.selectedTee) : null;
     const hcp = calcHcp(p.handicap, tee);
     all.push({name:p.name, handicap:p.handicap, playingHcp:hcp, teeColor:tee?tee.color:null,
