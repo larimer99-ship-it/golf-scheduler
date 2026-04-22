@@ -456,7 +456,7 @@
 <div class="summary-bar">
   <div class="stat stat-clickable" onclick="showAllTeeTimes()" title="View all tee times">
     <span class="stat-num" id="statRounds">0</span>
-    <span class="stat-label">Tee Times ▾</span>
+    <span class="stat-label">Click here to view all tee times</span>
   </div>
   <div class="stat stat-clickable" onclick="showAllPlayers()" title="View all players">
     <span class="stat-num" id="statPlayers">0</span>
@@ -716,7 +716,7 @@ function openDateCard(dateStr, hideOthers=true) {
   }
   renderDay(dateStr);
   updateCardBadge(dateStr);
-  setTimeout(()=>card.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+  if (hideOthers) setTimeout(()=>card.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
 }
 
 // Pack holes into notes field (API has no holes column)
@@ -1405,10 +1405,6 @@ function goToEarliestTee() {
   });
   if (!booked.length){showToast('No tee times set yet.');return;}
   showAllExpanded();
-  setTimeout(()=>{
-    const card=document.getElementById('card-'+booked[0].day);
-    if(card)card.scrollIntoView({behavior:'smooth',block:'start'});
-  },80);
 }
 
 // ── Tee Setup ─────────────────────────────────────────────
