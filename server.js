@@ -647,27 +647,46 @@ app.put('/api/tee-times/:id/scores/:hole', async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── Daily cleanup: delete today's tee times at 11:59 PM (server UTC) ────────
+// ─── Daily cleanup: delete today's tee times at 11:59 PM US Eastern ──────────
 
 function scheduleDailyCleanup() {
-  const now  = new Date();
-  const next = new Date(now);
+  const now = new Date();
+
+  // Resolve current Eastern local time by parsing the Eastern locale string on
+  // a UTC server (toLocaleString gives wall-clock Eastern; new Date() parses it
+  // as UTC, so the difference gives the Eastern→UTC offset in effect right now).
+  const easternStr = now.toLocaleString('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false,
+  });
+  const easternNow = new Date(easternStr); // numeric wall-clock Eastern value
+  const offsetMs   = now - easternNow;     // ms that UTC is ahead of Eastern (4h or 5h)
+
+  // Next 23:59:00 in Eastern wall-clock time
+  const next = new Date(easternNow);
   next.setHours(23, 59, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1); // already past — use tomorrow
-  const delay = next - now;
+  if (next <= easternNow) next.setDate(next.getDate() + 1);
+
+  const fireAt = new Date(next.getTime() + offsetMs); // converted back to real UTC
+  const delay  = fireAt - now;
+
   setTimeout(async () => {
-    const today = new Date().toISOString().slice(0, 10);
     try {
-      const { rowCount } = await pool.query(
-        "DELETE FROM tee_times WHERE tee_time::date = CURRENT_DATE"
-      );
-      console.log(`[cleanup] ${today}: removed ${rowCount} tee time(s)`);
+      // Delete tee times whose date (stored as Eastern wall-clock) matches today in Eastern
+      const { rowCount } = await pool.query(`
+        DELETE FROM tee_times
+        WHERE tee_time::date = (NOW() AT TIME ZONE 'America/New_York')::date
+      `);
+      const label = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'short' });
+      console.log(`[cleanup] ${label}: removed ${rowCount} tee time(s)`);
     } catch (err) {
       console.error('[cleanup] Error:', err.message);
     }
-    scheduleDailyCleanup(); // reschedule for next day
+    scheduleDailyCleanup(); // reschedule for next night
   }, delay);
-  console.log(`[cleanup] Next tee-time cleanup at ${next.toISOString()}`);
+
+  console.log(`[cleanup] Next tee-time cleanup at ${fireAt.toISOString()} (11:59 PM Eastern)`);
 }
 
 scheduleDailyCleanup();
