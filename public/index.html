@@ -274,6 +274,12 @@
   .sc-team-score-row td { background:rgba(0,0,0,0.14); border-top:1px solid rgba(255,255,255,0.08); }
   .sc-team-score-label { font-weight:700; letter-spacing:.04em; font-size:clamp(.6rem,1.2vw,.68rem); }
   .sc-team-score-td { font-weight:700; }
+  .sc-ou-row td { background:rgba(0,0,0,0.2); border-top:1px solid rgba(255,255,255,0.05); }
+  .sc-ou-label { font-weight:700; font-size:clamp(.6rem,1.2vw,.68rem); letter-spacing:.04em; opacity:.85; }
+  .sc-ou-td { font-weight:700; font-size:clamp(.6rem,1.2vw,.68rem); }
+  .sc-under { color:#52b788; }
+  .sc-over  { color:#e74c3c; }
+  .sc-even  { color:rgba(255,255,255,.45); }
 
   /* Players modal */
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:var(--pad); animation:fade-in 0.18s ease; }
@@ -1722,6 +1728,11 @@ const _scoreSaveTimers = {};
 
 function sanitizeId(str) { return String(str).replace(/[^a-zA-Z0-9]/g, '_'); }
 
+function fmtDiff(d) {
+  if (d === 0) return '<span class="sc-even">E</span>';
+  return `<span class="${d<0?'sc-under':'sc-over'}">${d>0?'+'+d:d}</span>`;
+}
+
 function strokesOnHole(playingHcp, si) {
   if (!si || playingHcp == null) return 0;
   const h = parseFloat(playingHcp);
@@ -1854,12 +1865,12 @@ function renderScorecard(day) {
       </tr>`;
     });
 
-    // Team score row — N best net scores per hole summed
+    // Pre-compute team hole scores so both rows can share the values
     const bb = team.best_balls || 1;
     const bbLabel = `${bb} Best Ball${bb>1?'s':''}`;
-    let tsF=0, tsB=0, tsFc=0, tsBc=0;
-    const tsCells = holeNums.map(h => {
-      const hSI  = si[h] || null;
+    const teamHoleScores = {};
+    holeNums.forEach(h => {
+      const hSI = si[h] || null;
       const nets = [];
       players.forEach(player => {
         const pName = typeof player === 'string' ? player : player.name;
@@ -1868,12 +1879,27 @@ function renderScorecard(day) {
         if (gross == null) return;
         nets.push(gross - strokesOnHole(phcp, hSI));
       });
-      if (!nets.length) return `<td class="sc-team-score-td" id="sc-ts-${team.id}-${h}"></td>`;
-      nets.sort((a,b)=>a-b);
-      const teamScore = nets.slice(0, Math.min(bb, nets.length)).reduce((s,v)=>s+v, 0);
-      if (h<=9)  { tsF+=teamScore; tsFc++; }
-      else       { tsB+=teamScore; tsBc++; }
-      return `<td class="sc-team-score-td" id="sc-ts-${team.id}-${h}">${teamScore}</td>`;
+      if (nets.length) { nets.sort((a,b)=>a-b); teamHoleScores[h] = nets.slice(0,Math.min(bb,nets.length)).reduce((s,v)=>s+v,0); }
+      else teamHoleScores[h] = null;
+    });
+
+    // Team score row
+    let tsF=0, tsB=0, tsFc=0, tsBc=0;
+    const tsCells = holeNums.map(h => {
+      const ts = teamHoleScores[h];
+      if (ts !== null) { if (h<=9){tsF+=ts;tsFc++;}else{tsB+=ts;tsBc++;} }
+      return `<td class="sc-team-score-td" id="sc-ts-${team.id}-${h}">${ts!=null?ts:''}</td>`;
+    });
+
+    // Over/Under row — team score vs (bb × par) per hole, uneditable
+    let ouF=0, ouB=0, ouFc=0, ouBc=0;
+    const ouCells = holeNums.map(h => {
+      const ts  = teamHoleScores[h];
+      const hp  = globalHolePar[h];
+      if (ts === null || !hp) return `<td class="sc-ou-td" id="sc-ou-${team.id}-${h}"></td>`;
+      const diff = ts - bb * hp;
+      if (h<=9){ouF+=diff;ouFc++;}else{ouB+=diff;ouBc++;}
+      return `<td class="sc-ou-td" id="sc-ou-${team.id}-${h}">${fmtDiff(diff)}</td>`;
     });
 
     return `<tr><td class="sc-label-td sc-team-header-td" colspan="22" style="color:${tc};border-top-color:${tc}44">${team.name}</td></tr>
@@ -1885,6 +1911,14 @@ function renderScorecard(day) {
         ${tsCells.slice(9).join('')}
         <td class="sc-sub-td" id="sc-tsin-${team.id}">${tsBc?tsB:''}</td>
         <td class="sc-tot-td" id="sc-tstot-${team.id}">${(tsFc||tsBc)?tsF+tsB:''}</td>
+      </tr>
+      <tr class="sc-ou-row">
+        <td class="sc-label-td sc-ou-label" style="color:${tc}">+/− Par</td>
+        ${ouCells.slice(0,9).join('')}
+        <td class="sc-sub-td sc-ou-td" id="sc-ouout-${team.id}">${ouFc?fmtDiff(ouF):''}</td>
+        ${ouCells.slice(9).join('')}
+        <td class="sc-sub-td sc-ou-td" id="sc-ouin-${team.id}">${ouBc?fmtDiff(ouB):''}</td>
+        <td class="sc-tot-td sc-ou-td" id="sc-outot-${team.id}">${(ouFc||ouBc)?fmtDiff(ouF+ouB):''}</td>
       </tr>`;
   }).join('');
 
@@ -1994,12 +2028,14 @@ function savePlayerScore(teamId, playerName, hole, rawValue) {
         nets0.push(gross-strokesOnHole(phcp,hSI0));
       });
       const tsEl=document.getElementById(`sc-ts-${teamId}-${hole}`);
-      if(tsEl){
-        if(nets0.length){nets0.sort((a,b)=>a-b);tsEl.textContent=nets0.slice(0,Math.min(bb,nets0.length)).reduce((s,v)=>s+v,0);}
-        else tsEl.textContent='';
-      }
-      // Update team subtotals
-      let tsF=0,tsB=0,tsFc=0,tsBc=0;
+      let ts0=null;
+      if(nets0.length){nets0.sort((a,b)=>a-b);ts0=nets0.slice(0,Math.min(bb,nets0.length)).reduce((s,v)=>s+v,0);}
+      if(tsEl) tsEl.textContent=ts0!=null?ts0:'';
+      // Update O/U cell for this hole
+      const ouEl=document.getElementById(`sc-ou-${teamId}-${hole}`);
+      if(ouEl){const hp=globalHolePar[hole];ouEl.innerHTML=(ts0!=null&&hp)?fmtDiff(ts0-bb*hp):'';}
+      // Update team score + O/U subtotals together
+      let tsF=0,tsB=0,tsFc=0,tsBc=0,ouF=0,ouB=0,ouFc=0,ouBc=0;
       for (let h=1; h<=18; h++) {
         const hSI=globalHoleSI[h]||null;
         const nets=[];
@@ -2014,6 +2050,8 @@ function savePlayerScore(teamId, playerName, hole, rawValue) {
         nets.sort((a,b)=>a-b);
         const ts=nets.slice(0,Math.min(bb,nets.length)).reduce((s,v)=>s+v,0);
         if(h<=9){tsF+=ts;tsFc++;}else{tsB+=ts;tsBc++;}
+        const hp=globalHolePar[h];
+        if(hp){const d=ts-bb*hp;if(h<=9){ouF+=d;ouFc++;}else{ouB+=d;ouBc++;}}
       }
       const to=document.getElementById(`sc-tsout-${teamId}`);
       const ti=document.getElementById(`sc-tsin-${teamId}`);
@@ -2021,6 +2059,12 @@ function savePlayerScore(teamId, playerName, hole, rawValue) {
       if(to)to.textContent=tsFc?tsF:'';
       if(ti)ti.textContent=tsBc?tsB:'';
       if(tt)tt.textContent=(tsFc||tsBc)?tsF+tsB:'';
+      const oo=document.getElementById(`sc-ouout-${teamId}`);
+      const oi=document.getElementById(`sc-ouin-${teamId}`);
+      const ot=document.getElementById(`sc-outot-${teamId}`);
+      if(oo)oo.innerHTML=ouFc?fmtDiff(ouF):'';
+      if(oi)oi.innerHTML=ouBc?fmtDiff(ouB):'';
+      if(ot)ot.innerHTML=(ouFc||ouBc)?fmtDiff(ouF+ouB):'';
     } catch(e) { console.error('savePlayerScore:', e); }
   }, 600);
 }
