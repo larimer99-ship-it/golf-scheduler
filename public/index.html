@@ -462,9 +462,9 @@
     <span class="stat-num" id="statPlayers">0</span>
     <span class="stat-label">Total Players ▾</span>
   </div>
-  <div class="stat stat-clickable" onclick="goToEarliestTee()" title="Jump to earliest tee time">
+  <div class="stat stat-clickable" onclick="goToEarliestTee()" title="Show all tee times, jump to earliest">
     <span class="stat-num" id="statEarliest">—</span>
-    <span class="stat-label">Earliest Tee ▸</span>
+    <span class="stat-label" id="statEarliestLabel">Earliest Tee</span>
   </div>
 </div>
 
@@ -674,10 +674,11 @@ function selectCalDate(dateStr) {
   openDateCard(dateStr);
 }
 
-function openDateCard(dateStr) {
+function openDateCard(dateStr, hideOthers=true) {
   getDateState(dateStr);
-  // Hide all other date cards
-  document.querySelectorAll('#calDayCards .day-card').forEach(c=>{if(c.id!=='card-'+dateStr)c.style.display='none';});
+  if (hideOthers) {
+    document.querySelectorAll('#calDayCards .day-card').forEach(c=>{if(c.id!=='card-'+dateStr)c.style.display='none';});
+  }
   let card=document.getElementById('card-'+dateStr);
   if (!card) {
     const d=new Date(dateStr+'T12:00:00');
@@ -1299,8 +1300,18 @@ function updateStats() {
   document.getElementById('statRounds').textContent=booked.length;
   const total=all.reduce((s,g)=>s+(g.players?g.players.length:0),0);
   document.getElementById('statPlayers').textContent=total;
-  if (!booked.length){document.getElementById('statEarliest').textContent='—';return;}
-  document.getElementById('statEarliest').textContent=formatTime([...booked].sort((a,b)=>a.time.localeCompare(b.time))[0].time);
+  if (!booked.length){
+    document.getElementById('statEarliest').innerHTML='—';
+    document.getElementById('statEarliestLabel').textContent='Earliest Tee';
+    return;
+  }
+  const earliest=Object.keys(state).flatMap(d=>(state[d].groups||[]).filter(g=>g.time).map(g=>({day:d,time:g.time})))
+    .sort((a,b)=>(a.day+'T'+a.time).localeCompare(b.day+'T'+b.time))[0];
+  const d=new Date(earliest.day+'T12:00:00');
+  const dayAbbr=d.toLocaleDateString('en-US',{weekday:'short'});
+  const dateAbbr=d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  document.getElementById('statEarliest').innerHTML=`${formatTime(earliest.time)}<span style="display:block;font-size:.65em;opacity:.7;font-weight:400">${dayAbbr} ${dateAbbr}</span>`;
+  document.getElementById('statEarliestLabel').textContent='Show All Tees';
 }
 
 function showToast(msg) {
@@ -1380,13 +1391,24 @@ function closePlayersModal(){document.getElementById('playersModal').classList.r
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePlayersModal();closeTeeTimesModal();qaClose();}});
 
 // ── Jump to earliest tee time ─────────────────────────────
+function showAllExpanded() {
+  const days=Object.keys(state).filter(d=>(state[d].groups||[]).some(g=>g.time||(g.players&&g.players.length))).sort();
+  if (!days.length){showToast('No tee times set yet.');return;}
+  document.getElementById('calSep').style.display='';
+  days.forEach(day=>openDateCard(day,false));
+}
+
 function goToEarliestTee() {
   const booked=Object.keys(state).flatMap(d=>(state[d].groups||[]).map(g=>({day:d,group:g}))).filter(x=>x.group.time).sort((a,b)=>{
     const dtA=a.day+'T'+a.group.time, dtB=b.day+'T'+b.group.time;
     return dtA.localeCompare(dtB);
   });
   if (!booked.length){showToast('No tee times set yet.');return;}
-  selectCalDate(booked[0].day);
+  showAllExpanded();
+  setTimeout(()=>{
+    const card=document.getElementById('card-'+booked[0].day);
+    if(card)card.scrollIntoView({behavior:'smooth',block:'start'});
+  },80);
 }
 
 // ── Tee Setup ─────────────────────────────────────────────
@@ -2261,13 +2283,13 @@ async function init() {
 
   await loadAll();
 
-  // Open cards for any dates that have tee times (so calendar dots show)
-  Object.keys(state).forEach(day => {
-    if ((state[day].groups||[]).length > 0 && !document.getElementById('card-'+day)) {
-      getDateState(day); // ensure state exists
-    }
-    updateCardBadge(day);
-  });
+  // Show all day cards with tee times expanded on load
+  const daysWithTimes = Object.keys(state).filter(d=>(state[d].groups||[]).some(g=>g.time||(g.players&&g.players.length))).sort();
+  if (daysWithTimes.length) {
+    document.getElementById('calSep').style.display='';
+    daysWithTimes.forEach(day=>openDateCard(day,false));
+  }
+  Object.keys(state).forEach(day=>updateCardBadge(day));
   updateStats();
   renderCalendar();
   renderTeeRows();
