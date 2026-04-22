@@ -456,7 +456,7 @@
 <div class="summary-bar">
   <div class="stat stat-clickable" onclick="showAllTeeTimes()" title="View all tee times">
     <span class="stat-num" id="statRounds">0</span>
-    <span class="stat-label">Click here to view all tee times</span>
+    <span class="stat-label">Click here to view a tee time and sign up</span>
   </div>
   <div class="stat stat-clickable" onclick="showAllPlayers()" title="View all players">
     <span class="stat-num" id="statPlayers">0</span>
@@ -464,7 +464,7 @@
   </div>
   <div class="stat stat-clickable" onclick="goToEarliestTee()" title="Show all tee times, jump to earliest">
     <span class="stat-num" id="statEarliest">—</span>
-    <span class="stat-label" id="statEarliestLabel">Earliest Tee</span>
+    <span class="stat-label" id="statEarliestLabel">Show the earliest tee time and go to that tee time when clicked</span>
   </div>
 </div>
 
@@ -1311,7 +1311,7 @@ function updateStats() {
   const dayAbbr=d.toLocaleDateString('en-US',{weekday:'short'});
   const dateAbbr=d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
   document.getElementById('statEarliest').innerHTML=`${formatTime(earliest.time)}<span style="display:block;font-size:.65em;opacity:.7;font-weight:400">${dayAbbr} ${dateAbbr}</span>`;
-  document.getElementById('statEarliestLabel').textContent='Show All Tees';
+  document.getElementById('statEarliestLabel').textContent='Show the earliest tee time and go to that tee time when clicked';
 }
 
 function showToast(msg) {
