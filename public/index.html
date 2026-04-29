@@ -458,7 +458,7 @@
   </div>
 </div>
 
-<div class="admin-only" style="display:none;max-width:min(960px,100%);margin:0 auto clamp(6px,1.5vw,12px);padding:0 var(--pad)">
+<div id="handicapAdminRow" style="display:none;max-width:min(960px,100%);margin:0 auto clamp(6px,1.5vw,12px);padding:0 var(--pad)">
   <button onclick="showHandicapEditor()" style="background:rgba(82,183,136,0.1);border:1px solid rgba(82,183,136,0.28);border-radius:5px;color:var(--light-green);cursor:pointer;font-family:'Courier Prime',monospace;font-size:0.76rem;letter-spacing:0.06em;padding:6px 14px">✏ Edit All Handicaps</button>
 </div>
 
@@ -562,8 +562,9 @@ function isAdmin() { return !!getToken(); }
 function applyAdminUI() {
   const admin = isAdmin();
   const d = v => v ? '' : 'none';
-  document.getElementById('courseRow').style.display     = d(admin);
-  document.getElementById('teeSetupPanel').style.display = d(admin);
+  document.getElementById('courseRow').style.display       = d(admin);
+  document.getElementById('teeSetupPanel').style.display   = d(admin);
+  document.getElementById('handicapAdminRow').style.display = d(admin);
   // player add rows: show name inputs only for admin
   document.querySelectorAll('.add-player-name-row').forEach(el => el.style.display = d(admin));
   // admin-only elements (e.g. remove date button)
