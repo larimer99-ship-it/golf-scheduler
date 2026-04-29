@@ -404,6 +404,11 @@
   .login-btn { background:var(--green); border:none; border-radius:5px; color:var(--white); cursor:pointer; font-family:'Courier Prime',monospace; font-size:0.9rem; font-weight:700; letter-spacing:0.08em; padding:11px; transition:background 0.2s; }
   .login-btn:hover { background:#3d8b68; }
   .login-error { color:#e07070; font-size:0.75rem; text-align:center; min-height:1em; }
+  .hcp-editor-row { display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid rgba(82,183,136,0.08); }
+  .hcp-editor-name { flex:1; font-size:clamp(0.82rem,2vw,0.9rem); color:var(--cream); }
+  .hcp-editor-input { background:rgba(0,0,0,0.25); border:1px solid rgba(82,183,136,0.2); border-radius:3px; color:var(--cream); font-family:'Courier Prime',monospace; font-size:clamp(0.8rem,1.8vw,0.88rem); padding:5px 10px; width:90px; outline:none; }
+  .hcp-editor-input:focus { border-color:var(--sand); }
+  .hcp-saved { color:var(--light-green); font-size:0.72rem; min-width:20px; text-align:right; }
 </style>
 </head>
 <body>
@@ -451,6 +456,10 @@
     <button class="btn-add-tee" onclick="addTee()">+ Add Tee</button>
     <p class="tee-setup-hint">Playing Handicap = Index × (Slope ÷ 113) + (Course Rating − Par)</p>
   </div>
+</div>
+
+<div class="admin-only" style="display:none;max-width:min(960px,100%);margin:0 auto clamp(6px,1.5vw,12px);padding:0 var(--pad)">
+  <button onclick="showHandicapEditor()" style="background:rgba(82,183,136,0.1);border:1px solid rgba(82,183,136,0.28);border-radius:5px;color:var(--light-green);cursor:pointer;font-family:'Courier Prime',monospace;font-size:0.76rem;letter-spacing:0.06em;padding:6px 14px">✏ Edit All Handicaps</button>
 </div>
 
 <div class="summary-bar">
@@ -503,6 +512,17 @@
       <button class="qa-cancel" onclick="qaClose()">Cancel</button>
       <button class="qa-save" onclick="qaSave()">Add Tee Time</button>
     </div>
+  </div>
+</div>
+
+<!-- Handicap editor modal -->
+<div id="handicapModal" class="modal-overlay" onclick="closeHandicapEditor()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <span class="modal-title">Player Handicap Indexes</span>
+      <button class="modal-close" onclick="closeHandicapEditor()">✕</button>
+    </div>
+    <div class="modal-body" id="handicapModalBody"></div>
   </div>
 </div>
 
@@ -1388,7 +1408,49 @@ function showAllPlayers() {
   document.getElementById('playersModal').classList.add('open');
 }
 function closePlayersModal(){document.getElementById('playersModal').classList.remove('open');}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePlayersModal();closeTeeTimesModal();qaClose();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePlayersModal();closeTeeTimesModal();qaClose();closeHandicapEditor();}});
+
+// ── Handicap Editor ────────────────────────────────────────
+async function showHandicapEditor() {
+  const body = document.getElementById('handicapModalBody');
+  body.innerHTML = '<div class="modal-empty">Loading…</div>';
+  document.getElementById('handicapModal').classList.add('open');
+  let players;
+  try { players = await apiFetch('GET', '/players'); }
+  catch(e) { body.innerHTML = `<div class="modal-empty">Error: ${e.message}</div>`; return; }
+  players.sort((a,b) => a.name.localeCompare(b.name));
+  if (!players.length) { body.innerHTML = '<div class="modal-empty">No players yet.</div>'; return; }
+  body.innerHTML = '';
+  players.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'hcp-editor-row';
+    row.innerHTML = `
+      <span class="hcp-editor-name">${p.name.replace(/</g,'&lt;')}</span>
+      <input class="hcp-editor-input" type="text" inputmode="decimal" placeholder="e.g. 12.4"
+        value="${p.handicap != null ? p.handicap : ''}"
+        onblur="saveHandicapInEditor(${p.id}, this.value, this)" />
+      <span class="hcp-saved" id="hcp-saved-${p.id}"></span>`;
+    body.appendChild(row);
+  });
+  body.querySelector('.hcp-editor-input').focus();
+}
+
+function closeHandicapEditor() {
+  document.getElementById('handicapModal').classList.remove('open');
+}
+
+async function saveHandicapInEditor(playerId, value, inputEl) {
+  const savedEl = document.getElementById(`hcp-saved-${playerId}`);
+  try {
+    await apiFetch('PUT', `/players/${playerId}`, { handicap: value || null });
+    const name = inputEl.closest('.hcp-editor-row').querySelector('.hcp-editor-name').textContent;
+    syncRosterHandicap(name, value);
+    if (savedEl) { savedEl.textContent = '✓'; setTimeout(() => { if (savedEl) savedEl.textContent = ''; }, 1500); }
+  } catch(e) {
+    if (savedEl) { savedEl.textContent = '!'; savedEl.style.color = '#e07070'; setTimeout(() => { if (savedEl) { savedEl.textContent = ''; savedEl.style.color = ''; } }, 2000); }
+    console.error('saveHandicapInEditor:', e);
+  }
+}
 
 // ── Jump to earliest tee time ─────────────────────────────
 function showAllExpanded() {
