@@ -409,6 +409,8 @@
   .hcp-editor-input { background:rgba(0,0,0,0.25); border:1px solid rgba(82,183,136,0.2); border-radius:3px; color:var(--cream); font-family:'Courier Prime',monospace; font-size:clamp(0.8rem,1.8vw,0.88rem); padding:5px 10px; width:90px; outline:none; }
   .hcp-editor-input:focus { border-color:var(--sand); }
   .hcp-saved { color:var(--light-green); font-size:0.72rem; min-width:20px; text-align:right; }
+  .hcp-remove-btn { background:none; border:none; color:rgba(224,112,112,0.4); cursor:pointer; font-size:0.85rem; padding:2px 4px; transition:color 0.15s; flex-shrink:0; }
+  .hcp-remove-btn:hover { color:#e07070; }
   .hcp-add-footer { display:flex; align-items:center; gap:8px; padding:12px 18px; border-top:1px solid rgba(82,183,136,0.15); flex-shrink:0; }
   .hcp-add-footer .hcp-editor-input { width:auto; flex:1; }
   .hcp-add-footer .hcp-hcp-input { width:70px; }
@@ -1435,7 +1437,8 @@ async function showHandicapEditor() {
       <input class="hcp-editor-input" type="text" inputmode="decimal" placeholder="e.g. 12.4"
         value="${p.handicap != null ? p.handicap : ''}"
         onblur="saveHandicapInEditor(${p.id}, this.value, this)" />
-      <span class="hcp-saved" id="hcp-saved-${p.id}"></span>`;
+      <span class="hcp-saved" id="hcp-saved-${p.id}"></span>
+      <button class="hcp-remove-btn" onclick="removePlayerInEditor(${p.id}, this)" title="Remove player">✕</button>`;
     body.appendChild(row);
   });
   body.querySelector('.hcp-editor-input').focus();
@@ -1455,6 +1458,25 @@ async function saveHandicapInEditor(playerId, value, inputEl) {
   } catch(e) {
     if (savedEl) { savedEl.textContent = '!'; savedEl.style.color = '#e07070'; setTimeout(() => { if (savedEl) { savedEl.textContent = ''; savedEl.style.color = ''; } }, 2000); }
     console.error('saveHandicapInEditor:', e);
+  }
+}
+
+async function removePlayerInEditor(playerId, btnEl) {
+  const row = btnEl.closest('.hcp-editor-row');
+  const name = row.querySelector('.hcp-editor-name').textContent;
+  if (!confirm(`Remove ${name}?`)) return;
+  try {
+    await apiFetch('DELETE', `/players/${playerId}`);
+    const idx = playerRoster.findIndex(p => p.apiId === playerId);
+    if (idx !== -1) playerRoster.splice(idx, 1);
+    row.remove();
+    const body = document.getElementById('handicapModalBody');
+    if (!body.querySelector('.hcp-editor-row')) {
+      body.innerHTML = '<div class="modal-empty">No players yet.</div>';
+    }
+  } catch(e) {
+    console.error('removePlayerInEditor:', e);
+    showToast('Error removing player.');
   }
 }
 
@@ -1490,7 +1512,8 @@ async function addPlayerInEditor() {
       <input class="hcp-editor-input" type="text" inputmode="decimal" placeholder="e.g. 12.4"
         value="${hcpVal != null ? hcpVal : ''}"
         onblur="saveHandicapInEditor(${result.id}, this.value, this)" />
-      <span class="hcp-saved" id="hcp-saved-${result.id}">✓</span>`;
+      <span class="hcp-saved" id="hcp-saved-${result.id}">✓</span>
+      <button class="hcp-remove-btn" onclick="removePlayerInEditor(${result.id}, this)" title="Remove player">✕</button>`;
     const rows = [...body.querySelectorAll('.hcp-editor-row')];
     const after = rows.find(r => r.querySelector('.hcp-editor-name').textContent.localeCompare(name) > 0);
     if (after) body.insertBefore(row, after); else body.appendChild(row);
