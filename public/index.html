@@ -1262,7 +1262,7 @@ async function renamePlayerParts(day, gid, idx, first, last) {
 // ── Roster ────────────────────────────────────────────────
 function renderGroupRoster(day, g) {
   const c=document.getElementById('gr-'+g.id); if(!c) return;
-  const available=playerRoster.filter(p=>p.name);
+  const available=playerRoster.filter(p=>p.name).sort((a,b)=>a.name.localeCompare(b.name));
   if (!available.length) { c.innerHTML=''; return; }
   const added=new Set((g.players||[]).map(p=>p.name));
   c.innerHTML=`<span class="saved-players-label">Saved Players</span>
