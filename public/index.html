@@ -1460,7 +1460,20 @@ async function addPlayerInEditor() {
   if (!name) { nameInput.focus(); return; }
   try {
     const hcpVal = hcpInput.value.trim() || null;
-    const result = await apiFetch('POST', '/players', { name, handicap: hcpVal });
+    // If token is stale (server restarted), re-authenticate then retry once
+    if (!getToken()) { const ok = await requireAdmin(); if (!ok) return; }
+    let result;
+    try {
+      result = await apiFetch('POST', '/players', { name, handicap: hcpVal });
+    } catch(e) {
+      if (e.message.includes('401')) {
+        localStorage.removeItem('authToken');
+        applyAdminUI();
+        const ok = await requireAdmin();
+        if (!ok) return;
+        result = await apiFetch('POST', '/players', { name, handicap: hcpVal });
+      } else { throw e; }
+    }
     playerRoster.push({ apiId: result.id, name, handicap: hcpVal || '' });
     const body = document.getElementById('handicapModalBody');
     const emptyEl = body.querySelector('.modal-empty');
