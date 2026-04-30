@@ -1262,7 +1262,7 @@ async function renamePlayerParts(day, gid, idx, first, last) {
 // ── Roster ────────────────────────────────────────────────
 function renderGroupRoster(day, g) {
   const c=document.getElementById('gr-'+g.id); if(!c) return;
-  const available=playerRoster.filter(p=>p.name).sort((a,b)=>a.name.localeCompare(b.name));
+  const available=playerRoster.filter(p=>p.name).sort((a,b)=>byLastName(a.name,b.name));
   if (!available.length) { c.innerHTML=''; return; }
   const added=new Set((g.players||[]).map(p=>p.name));
   c.innerHTML=`<span class="saved-players-label">Saved Players</span>
@@ -1275,6 +1275,11 @@ function renderGroupRoster(day, g) {
 
 function syncRosterHandicap(name, handicap) {
   const e=playerRoster.find(p=>p.name===name); if(e) e.handicap=handicap;
+}
+
+function byLastName(a, b) {
+  const last = n => { const p=n.trim().split(' '); return p[p.length-1].toLowerCase(); };
+  return last(a).localeCompare(last(b));
 }
 
 // ── Handicap calc ─────────────────────────────────────────
@@ -1419,7 +1424,7 @@ async function showHandicapEditor() {
   let players;
   try { players = await apiFetch('GET', '/players'); }
   catch(e) { body.innerHTML = `<div class="modal-empty">Error: ${e.message}</div>`; return; }
-  players.sort((a,b) => a.name.localeCompare(b.name));
+  players.sort((a,b) => byLastName(a.name, b.name));
   if (!players.length) { body.innerHTML = '<div class="modal-empty">No players yet.</div>'; return; }
   body.innerHTML = '';
   players.forEach(p => {
