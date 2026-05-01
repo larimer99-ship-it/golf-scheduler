@@ -1104,14 +1104,8 @@ function renderGroupChips(day, g) {
     chip.innerHTML = `
       <div class="chip-top-row">
         <div class="player-name-stack">
-          <input class="player-name-input player-firstname" style="${nameStyle}" value="${firstName.replace(/"/g,'&quot;')}"
-            placeholder="First" title="Edit first name"
-            onchange="renamePlayerParts('${day}','${g.id}',${i},this.value,document.getElementById('pln-${g.id}-${i}').value)"
-            onblur="renamePlayerParts('${day}','${g.id}',${i},this.value,document.getElementById('pln-${g.id}-${i}').value)" />
-          <input class="player-name-input player-lastname" id="pln-${g.id}-${i}" style="${nameStyle}" value="${lastName.replace(/"/g,'&quot;')}"
-            placeholder="Last" title="Edit last name"
-            onchange="renamePlayerParts('${day}','${g.id}',${i},document.getElementById('pln-${g.id}-${i}').previousElementSibling.value,this.value)"
-            onblur="renamePlayerParts('${day}','${g.id}',${i},document.getElementById('pln-${g.id}-${i}').previousElementSibling.value,this.value)" />
+          <span class="player-firstname" style="${nameStyle}">${firstName.replace(/</g,'&lt;')}</span>
+          ${lastName ? `<span class="player-lastname" style="${nameStyle}">${lastName.replace(/</g,'&lt;')}</span>` : ''}
         </div>
         <div class="transport-toggle">
           <button class="${p.transport==='walk'?'active-walk':''}" onclick="setTransport('${day}','${g.id}',${i},'walk')">🚶 Walk</button>
