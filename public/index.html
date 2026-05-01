@@ -440,7 +440,7 @@
 </div>
 
 <div class="header">
-  <span class="header-flag" id="flagIcon" onclick="onFlagClick()" title="">⛳</span>
+  <span class="header-flag" id="flagIcon" onclick="onFlagClick()" title=""><img src="/benvenue-logo.jpg" alt="Benvenue" style="height:clamp(24px,5vw,40px);width:auto;filter:invert(1);opacity:0.9;vertical-align:middle" /></span>
   <h1>Tee Time <span>Scheduler</span></h1>
   <p>Set your rounds for the week</p>
 </div>
@@ -454,7 +454,7 @@
 
 <div class="tee-setup-panel" id="teeSetupPanel" style="display:none">
   <div class="tee-setup-toggle" onclick="toggleTeeSetup()">
-    <span style="font-size:1.2rem;flex-shrink:0">⛳</span>
+    <img src="/benvenue-logo.jpg" alt="" style="height:1.3rem;width:auto;filter:invert(1);opacity:0.9;flex-shrink:0;vertical-align:middle" />
     <span class="tee-setup-toggle-label">Course Tees</span>
     <span class="tee-setup-toggle-sub" id="teeSetupSub">Configure tees &amp; ratings</span>
     <span class="tee-setup-arrow">▾</span>
@@ -1396,7 +1396,7 @@ function showAllPlayers() {
     section.innerHTML=`<div class="modal-day-heading">${d.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>`;
     groups.forEach(g=>{
       const timeEl=document.createElement('div'); timeEl.className='modal-group-time';
-      timeEl.textContent=`⛳ ${g.time?formatTime(g.time):'No time set'} · ${g.holes}`;
+      timeEl.innerHTML=`<img src="/benvenue-logo.jpg" alt="" style="height:0.85rem;width:auto;filter:invert(1);opacity:0.8;vertical-align:middle;margin-right:4px" />${g.time?formatTime(g.time):'No time set'} · ${g.holes}`;
       section.appendChild(timeEl);
       g.players.forEach(p=>{
         const tee=p.selectedTee?teeState.tees.find(t=>String(t.apiId||t.id)===p.selectedTee):null;
