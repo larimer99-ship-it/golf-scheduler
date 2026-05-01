@@ -409,6 +409,9 @@
   .hcp-editor-input { background:rgba(0,0,0,0.25); border:1px solid rgba(82,183,136,0.2); border-radius:3px; color:var(--cream); font-family:'Courier Prime',monospace; font-size:clamp(0.8rem,1.8vw,0.88rem); padding:5px 10px; width:90px; outline:none; }
   .hcp-editor-input:focus { border-color:var(--sand); }
   .hcp-saved { color:var(--light-green); font-size:0.72rem; min-width:20px; text-align:right; }
+  .hcp-ghin-input { background:rgba(0,0,0,0.25); border:1px solid rgba(82,183,136,0.2); border-radius:3px; color:var(--cream); font-family:'Courier Prime',monospace; font-size:clamp(0.8rem,1.8vw,0.88rem); padding:5px 10px; width:80px; outline:none; flex-shrink:0; }
+  .hcp-ghin-input:focus { border-color:var(--sand); }
+  .hcp-ghin-label { font-size:clamp(0.56rem,1.2vw,0.62rem); letter-spacing:0.12em; text-transform:uppercase; color:var(--light-green); opacity:0.7; white-space:nowrap; flex-shrink:0; }
   .hcp-remove-btn { background:none; border:none; color:rgba(224,112,112,0.4); cursor:pointer; font-size:0.85rem; padding:2px 4px; transition:color 0.15s; flex-shrink:0; }
   .hcp-remove-btn:hover { color:#e07070; }
   .hcp-add-footer { display:flex; align-items:center; gap:8px; padding:12px 18px; border-top:1px solid rgba(82,183,136,0.15); flex-shrink:0; }
@@ -530,6 +533,9 @@
     <div class="modal-body" id="handicapModalBody"></div>
     <div class="hcp-add-footer">
       <input id="hcpNewName" type="text" placeholder="Player name" class="hcp-editor-input"
+        onkeydown="if(event.key==='Enter')addPlayerInEditor()" />
+      <input id="hcpNewGhin" type="text" inputmode="numeric" placeholder="GHIN#"
+        class="hcp-ghin-input"
         onkeydown="if(event.key==='Enter')addPlayerInEditor()" />
       <input id="hcpNewHcp" type="text" inputmode="decimal" placeholder="HCP"
         class="hcp-editor-input hcp-hcp-input"
@@ -1434,6 +1440,10 @@ async function showHandicapEditor() {
     row.className = 'hcp-editor-row';
     row.innerHTML = `
       <span class="hcp-editor-name">${p.name.replace(/</g,'&lt;')}</span>
+      <span class="hcp-ghin-label">GHIN#</span>
+      <input class="hcp-ghin-input" type="text" inputmode="numeric" placeholder="1234567"
+        value="${p.ghin != null ? p.ghin : ''}"
+        onblur="saveGhinInEditor(${p.id}, this.value)" />
       <input class="hcp-editor-input" type="text" inputmode="decimal" placeholder="e.g. 12.4"
         value="${p.handicap != null ? p.handicap : ''}"
         onblur="saveHandicapInEditor(${p.id}, this.value, this)" />
@@ -1461,6 +1471,17 @@ async function saveHandicapInEditor(playerId, value, inputEl) {
   }
 }
 
+async function saveGhinInEditor(playerId, value) {
+  const savedEl = document.getElementById(`hcp-saved-${playerId}`);
+  try {
+    await apiFetch('PUT', `/players/${playerId}`, { ghin: value || null });
+    if (savedEl) { savedEl.textContent = '✓'; setTimeout(() => { if (savedEl) savedEl.textContent = ''; }, 1500); }
+  } catch(e) {
+    if (savedEl) { savedEl.textContent = '!'; savedEl.style.color = '#e07070'; setTimeout(() => { if (savedEl) { savedEl.textContent = ''; savedEl.style.color = ''; } }, 2000); }
+    console.error('saveGhinInEditor:', e);
+  }
+}
+
 async function removePlayerInEditor(playerId, btnEl) {
   const row = btnEl.closest('.hcp-editor-row');
   const name = row.querySelector('.hcp-editor-name').textContent;
@@ -1483,22 +1504,24 @@ async function removePlayerInEditor(playerId, btnEl) {
 async function addPlayerInEditor() {
   const nameInput = document.getElementById('hcpNewName');
   const hcpInput  = document.getElementById('hcpNewHcp');
+  const ghinInput = document.getElementById('hcpNewGhin');
   const name = nameInput.value.trim();
   if (!name) { nameInput.focus(); return; }
   try {
-    const hcpVal = hcpInput.value.trim() || null;
+    const hcpVal  = hcpInput.value.trim()  || null;
+    const ghinVal = ghinInput.value.trim() || null;
     // If token is stale (server restarted), re-authenticate then retry once
     if (!getToken()) { const ok = await requireAdmin(); if (!ok) return; }
     let result;
     try {
-      result = await apiFetch('POST', '/players', { name, handicap: hcpVal });
+      result = await apiFetch('POST', '/players', { name, handicap: hcpVal, ghin: ghinVal });
     } catch(e) {
       if (e.message.includes('401')) {
         localStorage.removeItem('authToken');
         applyAdminUI();
         const ok = await requireAdmin();
         if (!ok) return;
-        result = await apiFetch('POST', '/players', { name, handicap: hcpVal });
+        result = await apiFetch('POST', '/players', { name, handicap: hcpVal, ghin: ghinVal });
       } else { throw e; }
     }
     playerRoster.push({ apiId: result.id, name, handicap: hcpVal || '' });
@@ -1509,6 +1532,10 @@ async function addPlayerInEditor() {
     row.className = 'hcp-editor-row';
     row.innerHTML = `
       <span class="hcp-editor-name">${name.replace(/</g,'&lt;')}</span>
+      <span class="hcp-ghin-label">GHIN#</span>
+      <input class="hcp-ghin-input" type="text" inputmode="numeric" placeholder="1234567"
+        value="${ghinVal != null ? ghinVal : ''}"
+        onblur="saveGhinInEditor(${result.id}, this.value)" />
       <input class="hcp-editor-input" type="text" inputmode="decimal" placeholder="e.g. 12.4"
         value="${hcpVal != null ? hcpVal : ''}"
         onblur="saveHandicapInEditor(${result.id}, this.value, this)" />
@@ -1519,7 +1546,8 @@ async function addPlayerInEditor() {
     if (after) body.insertBefore(row, after); else body.appendChild(row);
     setTimeout(() => { const s = document.getElementById(`hcp-saved-${result.id}`); if (s) s.textContent = ''; }, 1500);
     nameInput.value = '';
-    hcpInput.value = '';
+    hcpInput.value  = '';
+    ghinInput.value = '';
     nameInput.focus();
   } catch(e) {
     console.error('addPlayerInEditor:', e);

@@ -70,13 +70,16 @@ app.get('/api/players', async (req, res) => {
   }
 });
 
+pool.query(`ALTER TABLE players ADD COLUMN IF NOT EXISTS ghin VARCHAR(20)`)
+  .catch(err => console.error('players migrate ghin:', err));
+
 app.post('/api/players', requireAuth, async (req, res) => {
-  const { name, email, phone, handicap } = req.body;
+  const { name, email, phone, handicap, ghin } = req.body;
   if (!name) return res.status(400).json({ error: 'name is required' });
   try {
     const { rows } = await pool.query(
-      'INSERT INTO players (name, email, phone, handicap) VALUES ($1,$2,$3,$4) RETURNING *',
-      [name, email || null, phone || null, handicap ?? null]
+      'INSERT INTO players (name, email, phone, handicap, ghin) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [name, email || null, phone || null, handicap ?? null, ghin || null]
     );
     res.status(201).json(rows[0]);
   } catch (err) {
@@ -85,16 +88,17 @@ app.post('/api/players', requireAuth, async (req, res) => {
 });
 
 app.put('/api/players/:id', async (req, res) => {
-  const { name, email, phone, handicap } = req.body;
+  const { name, email, phone, handicap, ghin } = req.body;
   try {
     const { rows } = await pool.query(
       `UPDATE players SET
          name     = COALESCE($1, name),
          email    = COALESCE($2, email),
          phone    = COALESCE($3, phone),
-         handicap = COALESCE($4, handicap)
-       WHERE id = $5 RETURNING *`,
-      [name || null, email || null, phone || null, handicap ?? null, req.params.id]
+         handicap = COALESCE($4, handicap),
+         ghin     = COALESCE($5, ghin)
+       WHERE id = $6 RETURNING *`,
+      [name || null, email || null, phone || null, handicap ?? null, ghin || null, req.params.id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Player not found' });
     res.json(rows[0]);
