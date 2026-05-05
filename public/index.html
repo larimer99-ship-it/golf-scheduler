@@ -2371,16 +2371,19 @@ function renderHoleEntry(day, teams, el) {
     return `<div class="${cls}" title="Hole ${hNum}" onclick="setCurrentHole(${hNum},'${day}')"></div>`;
   }).join('');
 
-  // Running match badge shown in hole-nav center
+  // Running over/under badge shown in hole-nav center
   let matchBadge = '';
-  if (ms && ms.match && ms.match.thru > 0) {
-    const { aUp, thru, aName, bName, aColor, bColor } = ms.match;
-    if (aUp === 0) {
-      matchBadge = `<div class="hole-match-badge"><span class="hm-as">AS</span> <span class="hm-sub">thru ${thru}</span></div>`;
-    } else {
-      const leader = aUp > 0 ? aName : bName;
-      const clr    = (aUp > 0 ? aColor : bColor) || 'var(--sand)';
-      matchBadge = `<div class="hole-match-badge"><span class="hm-up" style="color:${clr}">${leader} +${Math.abs(aUp)}</span> <span class="hm-sub">thru ${thru}</span></div>`;
+  if (ms) {
+    const active = ms.teamData.filter(td => td.thru > 0);
+    if (active.length > 0) {
+      const thru  = Math.max(...active.map(td => td.thru));
+      const parts = active.map(td => {
+        const d   = td.total != null ? td.total : td.out;
+        const fmt = d === 0 ? 'E' : (d > 0 ? '+'+d : String(d));
+        const clr = d < 0 ? 'var(--light-green)' : d > 0 ? '#e74c3c' : 'rgba(255,255,255,.45)';
+        return `<span style="color:${clr};font-weight:700">${fmt}</span>`;
+      });
+      matchBadge = `<div class="hole-match-badge">${parts.join(' · ')} <span class="hm-sub">thru ${thru}</span></div>`;
     }
   }
 
@@ -2412,34 +2415,20 @@ function renderHoleEntry(day, teams, el) {
     </div>`;
   }).join('');
 
-  // Summary table: net Out / In / Total per team + match status
+  // Summary table: over/under per nine and total per team
   let summaryHtml = '';
   if (ms) {
-    const fmt = v => v != null ? String(v) : '--';
+    const fmt = v => v != null ? fmtDiff(v) : '<span style="opacity:.28">--</span>';
     const rows = ms.teamData.map(td => `<tr>
       <td style="color:${td.color};font-size:.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;padding-right:4px">${td.name}</td>
-      <td class="mc${td.out   !=null?' v':''}">${fmt(td.out)}</td>
-      <td class="mc${td.in    !=null?' v':''}">${fmt(td.in)}</td>
-      <td class="mc${td.total !=null?' v':''}">${fmt(td.total)}</td>
+      <td class="mc">${fmt(td.out)}</td>
+      <td class="mc">${fmt(td.in)}</td>
+      <td class="mc">${fmt(td.total)}</td>
     </tr>`).join('');
-
-    let statusRow = '';
-    if (ms.match && ms.match.thru > 0) {
-      const { aUp, thru, aName, bName, aColor, bColor } = ms.match;
-      if (aUp === 0) {
-        statusRow = `<tr><td colspan="4" class="match-status-cell"><span class="m-as">ALL SQUARE</span> <span class="hm-sub">thru ${thru}</span></td></tr>`;
-      } else {
-        const leader = aUp > 0 ? aName : bName;
-        const clr    = (aUp > 0 ? aColor : bColor) || 'var(--sand)';
-        statusRow = `<tr><td colspan="4" class="match-status-cell"><span class="m-lead" style="color:${clr}">${leader} +${Math.abs(aUp)}</span> <span class="hm-sub">thru ${thru}</span></td></tr>`;
-      }
-    }
-
     summaryHtml = `<div class="match-summary">
       <table class="match-tbl">
         <tr class="match-tbl-hdr"><td></td><td class="mc">OUT</td><td class="mc">IN</td><td class="mc">TOT</td></tr>
         ${rows}
-        ${statusRow}
       </table>
     </div>`;
   }
@@ -2534,31 +2523,20 @@ function computeMatchState(day, teams) {
         holeNets[h] = nets.slice(0, Math.min(bb, nets.length)).reduce((s,v)=>s+v, 0);
       }
     }
-    let out=0,outC=0,inn=0,inC=0;
-    for (let h=1;  h<=9;  h++) if (holeNets[h]!=null){out+=holeNets[h];outC++;}
-    for (let h=10; h<=18; h++) if (holeNets[h]!=null){inn+=holeNets[h];inC++;}
+    // Over/under vs par for each nine and total
+    let outD=0,outC=0,inD=0,inC=0;
+    for (let h=1;  h<=9;  h++) { const hp=globalHolePar[h]; if(holeNets[h]!=null&&hp){outD+=holeNets[h]-bb*hp;outC++;} }
+    for (let h=10; h<=18; h++) { const hp=globalHolePar[h]; if(holeNets[h]!=null&&hp){inD+=holeNets[h]-bb*hp;inC++;} }
     return {
       teamId: team.id, name: team.name, color: team.color||'var(--light-green)',
       holeNets,
-      out:   outC>0 ? out  : null,
-      in:    inC>0  ? inn  : null,
-      total: (outC+inC)>0 ? out+inn : null,
+      out:   outC>0 ? outD       : null,
+      in:    inC>0  ? inD        : null,
+      total: (outC+inC)>0 ? outD+inD : null,
+      thru:  outC+inC,
     };
   });
-  let match = null;
-  if (teams.length === 2) {
-    const [a, b] = teamData;
-    let aUp=0, thru=0;
-    for (let h=1; h<=18; h++) {
-      if (a.holeNets[h]!=null && b.holeNets[h]!=null) {
-        if      (a.holeNets[h] < b.holeNets[h]) aUp++;
-        else if (b.holeNets[h] < a.holeNets[h]) aUp--;
-        thru++;
-      }
-    }
-    match = { aUp, thru, aName:a.name, bName:b.name, aColor:a.color, bColor:b.color };
-  }
-  return { teamData, match };
+  return { teamData };
 }
 
 async function deleteScorecard(day) {
