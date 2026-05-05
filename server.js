@@ -435,6 +435,16 @@ app.delete('/api/player-scores', requireAuth, async (req, res) => {
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
+app.delete('/api/scorecard', requireAuth, async (req, res) => {
+  const { date } = req.query;
+  if (!date) return res.status(400).json({ error: 'date required' });
+  try {
+    // Cascades to player_scores and team_scores
+    await pool.query('DELETE FROM day_teams WHERE date = $1::date', [date]);
+    res.status(204).send();
+  } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/team-scores', async (req, res) => {
   const { date } = req.query;
   if (!date) return res.status(400).json({ error: 'date required' });
@@ -677,13 +687,16 @@ function scheduleDailyCleanup() {
 
   setTimeout(async () => {
     try {
-      // Delete tee times whose date (stored as Eastern wall-clock) matches today in Eastern
-      const { rowCount } = await pool.query(`
-        DELETE FROM tee_times
-        WHERE tee_time::date = (NOW() AT TIME ZONE 'America/New_York')::date
+      const todayExpr = `(NOW() AT TIME ZONE 'America/New_York')::date`;
+      const { rowCount: ttRows } = await pool.query(`
+        DELETE FROM tee_times WHERE tee_time::date = ${todayExpr}
+      `);
+      // Cascades to player_scores and team_scores
+      const { rowCount: scRows } = await pool.query(`
+        DELETE FROM day_teams WHERE date = ${todayExpr}
       `);
       const label = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'short' });
-      console.log(`[cleanup] ${label}: removed ${rowCount} tee time(s)`);
+      console.log(`[cleanup] ${label}: removed ${ttRows} tee time(s), ${scRows} scorecard(s)`);
     } catch (err) {
       console.error('[cleanup] Error:', err.message);
     }

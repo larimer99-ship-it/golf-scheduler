@@ -2339,7 +2339,7 @@ function renderScorecard(day) {
     <div class="scorecard-header">
       <span class="scorecard-title">📋 Scorecard</span>
       <span class="live-dot">● LIVE</span>
-      ${isAdmin() ? `<button class="btn-delete-sc" onclick="deleteScorecard('${day}')">🗑 Clear Scores</button>` : ''}
+      ${isAdmin() ? `<button class="btn-delete-sc" onclick="deleteScorecard('${day}')">🗑 Clear Scores</button><button class="btn-delete-sc" onclick="deleteFullScorecard('${day}')" style="margin-left:4px">🗑 Delete Scorecard</button>` : ''}
       <button class="btn-close-sc" onclick="closeScorecard('${day}')">✕</button>
     </div>
     <div class="view-toggle">
@@ -2442,7 +2442,7 @@ function renderHoleEntry(day, teams, el) {
     <div class="scorecard-header">
       <span class="scorecard-title">📋 Scorecard</span>
       <span class="live-dot">● LIVE</span>
-      ${isAdmin() ? `<button class="btn-delete-sc" onclick="deleteScorecard('${day}')">🗑 Clear Scores</button>` : ''}
+      ${isAdmin() ? `<button class="btn-delete-sc" onclick="deleteScorecard('${day}')">🗑 Clear Scores</button><button class="btn-delete-sc" onclick="deleteFullScorecard('${day}')" style="margin-left:4px">🗑 Delete Scorecard</button>` : ''}
       <button class="btn-close-sc" onclick="closeScorecard('${day}')">✕</button>
     </div>
     <div class="view-toggle">
@@ -2544,17 +2544,43 @@ function computeMatchState(day, teams) {
   return { teamData };
 }
 
-async function deleteScorecard(day) {
-  if (!confirm('Delete all scores for this scorecard? This cannot be undone.')) return;
-  // Cancel any pending debounced saves so they don't re-add scores after delete
+async function _adminDelete(url, confirmMsg) {
+  if (!confirm(confirmMsg)) return false;
   Object.keys(_scoreSaveTimers).forEach(k => clearTimeout(_scoreSaveTimers[k]));
+  const doReq = () => apiFetch('DELETE', url);
   try {
-    await apiFetch('DELETE', `/player-scores?date=${day}`);
-    // Clear local state for all teams on this day
+    await doReq();
+    return true;
+  } catch(e) {
+    if (!e.message.includes('401')) throw e;
+    localStorage.removeItem('authToken');
+    applyAdminUI();
+    const ok = await requireAdmin();
+    if (!ok) return false;
+    await doReq();
+    return true;
+  }
+}
+
+async function deleteScorecard(day) {
+  try {
+    const ok = await _adminDelete(`/player-scores?date=${day}`, 'Clear all scores for this scorecard? This cannot be undone.');
+    if (!ok) return;
     (savedTeams[day] || []).forEach(t => { delete playerScoreData[t.id]; });
     renderScorecard(day);
-    showToast('Scorecard cleared');
-  } catch(e) { console.error('deleteScorecard:', e); showToast('⚠ Failed to delete scorecard'); }
+    showToast('Scores cleared');
+  } catch(e) { console.error('deleteScorecard:', e); showToast(`⚠ Failed to clear scores (${e.message})`); }
+}
+
+async function deleteFullScorecard(day) {
+  try {
+    const ok = await _adminDelete(`/scorecard?date=${day}`, 'Delete the entire scorecard (teams + all scores)? This cannot be undone.');
+    if (!ok) return;
+    (savedTeams[day] || []).forEach(t => { delete playerScoreData[t.id]; });
+    delete savedTeams[day];
+    closeScorecard(day);
+    showToast('Scorecard deleted');
+  } catch(e) { console.error('deleteFullScorecard:', e); showToast(`⚠ Failed to delete scorecard (${e.message})`); }
 }
 
 const _parSaveTimers = {};
