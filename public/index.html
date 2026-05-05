@@ -328,6 +328,8 @@
   .stroke-dot{color:#e74c3c;font-size:.55rem;vertical-align:super;margin-left:1px;letter-spacing:-1px;}
   .sc-stroke-td{background:rgba(231,76,60,.1);}
   .hole-player-entry.stroke-hole{border:2px solid rgba(231,76,60,.65);border-radius:5px;background:rgba(231,76,60,.07);margin:2px 4px;padding:5px 8px;}
+  .hole-player-wrap{padding:6px 0 0;}
+  .hole-player-stroke-lbl{font-size:.6rem;color:rgba(255,255,255,.38);letter-spacing:.07em;text-transform:uppercase;padding:0 14px 2px;}
   .hole-match-badge{font-size:.68rem;margin-top:3px;}
   .hm-up{font-weight:700;}
   .hm-as{color:var(--light-green);font-weight:700;}
@@ -2409,9 +2411,12 @@ function renderHoleEntry(day, teams, el) {
         const sel = current === v ? ' sel' : '';
         return `<button class="sc-score-btn${sel}" onclick="scoreButtonClick('${team.id}','${safe}',${h},${v},'${day}')">${v}</button>`;
       }).join('');
-      return `<div class="hole-player-entry${strokes>0?' stroke-hole':''}">
-        <span class="hole-player-name">${pName}${hcpLabel}${dots}</span>
-        <div class="score-btns">${btns}</div>
+      return `<div class="hole-player-wrap">
+        <div class="hole-player-stroke-lbl">Stroke Count: ${strokes}</div>
+        <div class="hole-player-entry${strokes>0?' stroke-hole':''}">
+          <span class="hole-player-name">${pName}${hcpLabel}${dots}</span>
+          <div class="score-btns">${btns}</div>
+        </div>
       </div>`;
     }).join('');
     return `<div class="hole-teams-entry" style="border-top:1px solid ${tc}44">
