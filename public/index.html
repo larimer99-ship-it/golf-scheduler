@@ -301,6 +301,30 @@
   .sc-under { color:#52b788; }
   .sc-over  { color:#e74c3c; }
   .sc-even  { color:rgba(255,255,255,.45); }
+  /* Hole-by-hole entry view */
+  .view-toggle{display:flex;border-bottom:1px solid rgba(82,183,136,.15);}
+  .view-tab{flex:1;background:none;border:none;border-bottom:2px solid transparent;color:rgba(255,255,255,.38);cursor:pointer;font-family:'Courier Prime',monospace;font-size:.7rem;letter-spacing:.07em;padding:8px 0;transition:.18s;}
+  .view-tab.on{color:var(--light-green);border-bottom-color:var(--light-green);}
+  .view-tab:hover{color:var(--cream);}
+  .hole-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;}
+  .hole-nav-btn{background:rgba(82,183,136,.1);border:1px solid rgba(82,183,136,.3);border-radius:5px;color:var(--light-green);cursor:pointer;font-family:'Courier Prime',monospace;font-size:.8rem;padding:6px 16px;transition:.18s;}
+  .hole-nav-btn:hover:not(:disabled){background:rgba(82,183,136,.25);border-color:rgba(82,183,136,.7);}
+  .hole-nav-btn:disabled{opacity:.22;cursor:not-allowed;}
+  .hole-info-center{text-align:center;}
+  .hole-num-big{font-family:'Playfair Display',serif;font-size:1.55rem;font-weight:700;color:var(--cream);line-height:1.1;}
+  .hole-meta-line{font-size:.68rem;color:var(--sand);letter-spacing:.08em;margin-top:2px;}
+  .hole-pips{display:flex;gap:4px;padding:6px 14px 10px;justify-content:center;}
+  .hole-pip{width:15px;height:9px;border-radius:2px;border:1px solid rgba(82,183,136,.18);background:rgba(0,0,0,.25);cursor:pointer;transition:.15s;}
+  .hole-pip.scored{background:rgba(82,183,136,.35);border-color:rgba(82,183,136,.55);}
+  .hole-pip.cur{background:rgba(212,168,83,.55);border-color:var(--sand);}
+  .hole-teams-entry{border-top:1px solid rgba(82,183,136,.12);}
+  .hole-team-hdr{padding:7px 14px 4px;font-size:.72rem;font-weight:700;letter-spacing:.06em;}
+  .hole-player-entry{display:flex;align-items:center;gap:8px;padding:7px 12px;border-top:1px solid rgba(255,255,255,.04);}
+  .hole-player-name{flex:0 0 auto;font-size:.75rem;color:var(--pale-green);width:clamp(70px,28%,130px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .score-btns{display:flex;gap:3px;flex:1;}
+  .sc-score-btn{flex:1;height:34px;border-radius:4px;border:1px solid rgba(82,183,136,.18);background:rgba(0,0,0,.25);color:rgba(255,255,255,.6);cursor:pointer;font-family:'Courier Prime',monospace;font-size:.85rem;font-weight:700;transition:.13s;min-width:0;padding:0;}
+  .sc-score-btn:hover{border-color:rgba(82,183,136,.55);background:rgba(82,183,136,.12);color:#fff;}
+  .sc-score-btn.sel{border-color:var(--sand);background:rgba(212,168,83,.22);color:var(--sand);}
 
   /* Players modal */
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:var(--pad); animation:fade-in 0.18s ease; }
@@ -2088,6 +2112,8 @@ const globalHolePar   = {}; // { [hole]: par }        — global, set once, used
 let _scorecardDay      = null;
 let _scorecardInterval = null;
 const _scoreSaveTimers = {};
+let _currentHole = 1;
+let _viewMode    = 'entry'; // 'entry' | 'table'
 
 function sanitizeId(str) { return String(str).replace(/[^a-zA-Z0-9]/g, '_'); }
 
@@ -2158,6 +2184,8 @@ function renderScorecard(day) {
     </div>`;
     return;
   }
+
+  if (_viewMode === 'entry') { renderHoleEntry(day, teams, el); return; }
 
   const holeNums = Array.from({length:18}, (_,i) => i+1);
   const si       = globalHoleSI;
@@ -2295,6 +2323,10 @@ function renderScorecard(day) {
       ${isAdmin() ? `<button class="btn-delete-sc" onclick="deleteScorecard('${day}')">🗑 Clear Scores</button>` : ''}
       <button class="btn-close-sc" onclick="closeScorecard('${day}')">✕</button>
     </div>
+    <div class="view-toggle">
+      <button class="view-tab" onclick="setViewMode('entry','${day}')">Hole Entry</button>
+      <button class="view-tab on" onclick="setViewMode('table','${day}')">Full Card</button>
+    </div>
     <div class="scorecard-scroll">
       <table class="scorecard-table">
         <thead>
@@ -2310,6 +2342,99 @@ function renderScorecard(day) {
       </table>
     </div>
   </div>`;
+}
+
+function renderHoleEntry(day, teams, el) {
+  const h   = _currentHole;
+  const par = globalHolePar[h] || '-';
+  const si  = globalHoleSI[h]  || '-';
+
+  const pips = Array.from({length:18}, (_,i) => {
+    const hNum = i + 1;
+    const allScored = teams.length > 0 && teams.every(team => {
+      const players = Array.isArray(team.players) ? team.players : [];
+      return players.length > 0 && players.every(player => {
+        const pName = typeof player === 'string' ? player : player.name;
+        return (playerScoreData[team.id]||{})[pName]?.[hNum] != null;
+      });
+    });
+    const cls = hNum === h ? 'hole-pip cur' : (allScored ? 'hole-pip scored' : 'hole-pip');
+    return `<div class="${cls}" title="Hole ${hNum}" onclick="setCurrentHole(${hNum},'${day}')"></div>`;
+  }).join('');
+
+  const teamSections = teams.map(team => {
+    const tc      = team.color || 'var(--light-green)';
+    const players = Array.isArray(team.players) ? team.players : [];
+    const playerEntries = players.map(player => {
+      const pName   = typeof player === 'string' ? player : player.name;
+      const phcp    = typeof player === 'object' ? player.playingHcp : null;
+      const current = (playerScoreData[team.id]||{})[pName]?.[h];
+      const hcpLabel = phcp != null ? ` (${phcp})` : '';
+      const strokes  = strokesOnHole(phcp, globalHoleSI[h]);
+      const dot      = strokes > 0 ? ' •' : '';
+      const safe     = pName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const btns     = Array.from({length:9}, (_,i) => {
+        const v   = i + 1;
+        const sel = current === v ? ' sel' : '';
+        return `<button class="sc-score-btn${sel}" onclick="scoreButtonClick('${team.id}','${safe}',${h},${v},'${day}')">${v}</button>`;
+      }).join('');
+      return `<div class="hole-player-entry">
+        <span class="hole-player-name">${pName}${hcpLabel}${dot}</span>
+        <div class="score-btns">${btns}</div>
+      </div>`;
+    }).join('');
+    return `<div class="hole-teams-entry" style="border-top:1px solid ${tc}44">
+      <div style="padding:5px 12px 2px;font-size:.72rem;color:${tc};letter-spacing:.07em;font-weight:700">${team.name}</div>
+      ${playerEntries}
+    </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="scorecard-panel">
+    <div class="scorecard-header">
+      <span class="scorecard-title">📋 Scorecard</span>
+      <span class="live-dot">● LIVE</span>
+      ${isAdmin() ? `<button class="btn-delete-sc" onclick="deleteScorecard('${day}')">🗑 Clear Scores</button>` : ''}
+      <button class="btn-close-sc" onclick="closeScorecard('${day}')">✕</button>
+    </div>
+    <div class="view-toggle">
+      <button class="view-tab on" onclick="setViewMode('entry','${day}')">Hole Entry</button>
+      <button class="view-tab" onclick="setViewMode('table','${day}')">Full Card</button>
+    </div>
+    <div class="hole-nav">
+      <button class="hole-nav-btn" onclick="setCurrentHole(${h-1},'${day}')"${h<=1?' disabled':''}>← Prev</button>
+      <div style="text-align:center">
+        <div class="hole-num-big">Hole ${h}</div>
+        <div class="hole-meta-line">PAR ${par} · HCP ${si}</div>
+      </div>
+      <button class="hole-nav-btn" onclick="setCurrentHole(${h+1},'${day}')"${h>=18?' disabled':''}>Next →</button>
+    </div>
+    <div class="hole-pips">${pips}</div>
+    ${teamSections}
+  </div>`;
+}
+
+function setCurrentHole(h, day) {
+  _currentHole = Math.max(1, Math.min(18, h));
+  renderScorecard(day || _scorecardDay);
+}
+
+function setViewMode(mode, day) {
+  _viewMode = mode;
+  renderScorecard(day || _scorecardDay);
+}
+
+function scoreButtonClick(teamId, playerName, hole, score, day) {
+  const current = (playerScoreData[teamId]||{})[playerName]?.[hole];
+  const newScore = current === score ? null : score;
+  if (!playerScoreData[teamId]) playerScoreData[teamId] = {};
+  if (!playerScoreData[teamId][playerName]) playerScoreData[teamId][playerName] = {};
+  playerScoreData[teamId][playerName][hole] = newScore;
+  const d = day || _scorecardDay;
+  if (_viewMode === 'entry') {
+    const entryEl = document.getElementById('scorecard-'+d);
+    if (entryEl) renderHoleEntry(d, savedTeams[d] || [], entryEl);
+  }
+  savePlayerScore(teamId, playerName, hole, newScore != null ? String(newScore) : '');
 }
 
 async function deleteScorecard(day) {
