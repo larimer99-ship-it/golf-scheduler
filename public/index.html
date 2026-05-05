@@ -326,6 +326,7 @@
   .sc-score-btn:hover{border-color:rgba(82,183,136,.55);background:rgba(82,183,136,.12);color:#fff;}
   .sc-score-btn.sel{border-color:var(--sand);background:rgba(212,168,83,.22);color:var(--sand);}
   .stroke-dot{color:#e74c3c;font-size:.55rem;vertical-align:super;margin-left:1px;letter-spacing:-1px;}
+  .sc-stroke-td{background:rgba(231,76,60,.1);}
   .hole-player-entry.stroke-hole{border-left:3px solid rgba(231,76,60,.55);background:rgba(231,76,60,.06);}
   .hole-match-badge{font-size:.68rem;margin-top:3px;}
   .hm-up{font-weight:700;}
@@ -2171,6 +2172,8 @@ async function loadScores(day) {
       apiFetch('GET', `/player-scores?date=${day}`),
     ]);
     savedTeams[day] = teams;
+    // Reset local cache so deleted scores don't persist
+    teams.forEach(t => { delete playerScoreData[t.id]; });
     pScores.forEach(s => {
       if (!playerScoreData[s.team_id]) playerScoreData[s.team_id] = {};
       if (!playerScoreData[s.team_id][s.player_name]) playerScoreData[s.team_id][s.player_name] = {};
@@ -2259,7 +2262,8 @@ function renderScorecard(day) {
         const v = pScores[h];
         if (h<=9  && v!=null) { front+=v; fc++; }
         if (h>9   && v!=null) { back +=v; bc++; }
-        return `<td><input type="number" class="sc-input" min="1" max="20" value="${v!=null?v:''}" onchange="savePlayerScore('${team.id}','${safe}',${h},this.value)" /></td>`;
+        const strokeCls = strokesOnHole(phcp, si[h]) > 0 ? ' sc-stroke-td' : '';
+        return `<td class="${strokeCls}"><input type="number" class="sc-input" min="1" max="20" value="${v!=null?v:''}" onchange="savePlayerScore('${team.id}','${safe}',${h},this.value)" /></td>`;
       });
       return `<tr class="sc-player-row">
         <td class="sc-label-td sc-player-label">${pName}${hcpLabel}</td>
@@ -2542,6 +2546,8 @@ function computeMatchState(day, teams) {
 
 async function deleteScorecard(day) {
   if (!confirm('Delete all scores for this scorecard? This cannot be undone.')) return;
+  // Cancel any pending debounced saves so they don't re-add scores after delete
+  Object.keys(_scoreSaveTimers).forEach(k => clearTimeout(_scoreSaveTimers[k]));
   try {
     await apiFetch('DELETE', `/player-scores?date=${day}`);
     // Clear local state for all teams on this day
