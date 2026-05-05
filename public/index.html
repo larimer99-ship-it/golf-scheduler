@@ -325,6 +325,19 @@
   .sc-score-btn{flex:1;height:34px;border-radius:4px;border:1px solid rgba(82,183,136,.18);background:rgba(0,0,0,.25);color:rgba(255,255,255,.6);cursor:pointer;font-family:'Courier Prime',monospace;font-size:.85rem;font-weight:700;transition:.13s;min-width:0;padding:0;}
   .sc-score-btn:hover{border-color:rgba(82,183,136,.55);background:rgba(82,183,136,.12);color:#fff;}
   .sc-score-btn.sel{border-color:var(--sand);background:rgba(212,168,83,.22);color:var(--sand);}
+  .stroke-dot{color:var(--sand);font-size:.55rem;vertical-align:super;margin-left:1px;letter-spacing:-1px;}
+  .hole-match-badge{font-size:.68rem;margin-top:3px;}
+  .hm-up{font-weight:700;}
+  .hm-as{color:var(--light-green);font-weight:700;}
+  .hm-sub{color:rgba(255,255,255,.32);font-size:.62rem;}
+  .match-summary{padding:10px 14px 14px;border-top:2px solid rgba(82,183,136,.12);}
+  .match-tbl{width:100%;border-collapse:collapse;font-size:.77rem;}
+  .match-tbl-hdr td{color:rgba(255,255,255,.3);font-size:.62rem;letter-spacing:.09em;text-transform:uppercase;padding-bottom:5px;}
+  .mc{width:42px;text-align:center;font-variant-numeric:tabular-nums;color:rgba(255,255,255,.35);padding:2px 0;}
+  .mc.v{color:var(--cream);}
+  .match-status-cell{padding-top:8px;border-top:1px solid rgba(82,183,136,.1);text-align:center;font-size:.77rem;}
+  .m-lead{font-weight:700;}
+  .m-as{color:var(--light-green);font-weight:700;}
 
   /* Players modal */
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; padding:var(--pad); animation:fade-in 0.18s ease; }
@@ -2112,8 +2125,9 @@ const globalHolePar   = {}; // { [hole]: par }        — global, set once, used
 let _scorecardDay      = null;
 let _scorecardInterval = null;
 const _scoreSaveTimers = {};
-let _currentHole = 1;
-let _viewMode    = 'entry'; // 'entry' | 'table'
+let _currentHole      = 1;
+let _viewMode         = 'entry'; // 'entry' | 'table'
+let _autoAdvanceTimer = null;
 
 function sanitizeId(str) { return String(str).replace(/[^a-zA-Z0-9]/g, '_'); }
 
@@ -2348,30 +2362,39 @@ function renderHoleEntry(day, teams, el) {
   const h   = _currentHole;
   const par = globalHolePar[h] || '-';
   const si  = globalHoleSI[h]  || '-';
+  const ms  = computeMatchState(day, teams);
 
+  // Progress pips
   const pips = Array.from({length:18}, (_,i) => {
     const hNum = i + 1;
-    const allScored = teams.length > 0 && teams.every(team => {
-      const players = Array.isArray(team.players) ? team.players : [];
-      return players.length > 0 && players.every(player => {
-        const pName = typeof player === 'string' ? player : player.name;
-        return (playerScoreData[team.id]||{})[pName]?.[hNum] != null;
-      });
-    });
-    const cls = hNum === h ? 'hole-pip cur' : (allScored ? 'hole-pip scored' : 'hole-pip');
+    const cls  = hNum === h ? 'hole-pip cur' : (allScoredOnHole(day, hNum) ? 'hole-pip scored' : 'hole-pip');
     return `<div class="${cls}" title="Hole ${hNum}" onclick="setCurrentHole(${hNum},'${day}')"></div>`;
   }).join('');
 
+  // Running match badge shown in hole-nav center
+  let matchBadge = '';
+  if (ms && ms.match && ms.match.thru > 0) {
+    const { aUp, thru, aName, bName, aColor, bColor } = ms.match;
+    if (aUp === 0) {
+      matchBadge = `<div class="hole-match-badge"><span class="hm-as">AS</span> <span class="hm-sub">thru ${thru}</span></div>`;
+    } else {
+      const leader = aUp > 0 ? aName : bName;
+      const clr    = (aUp > 0 ? aColor : bColor) || 'var(--sand)';
+      matchBadge = `<div class="hole-match-badge"><span class="hm-up" style="color:${clr}">${leader} +${Math.abs(aUp)}</span> <span class="hm-sub">thru ${thru}</span></div>`;
+    }
+  }
+
+  // Team/player entry rows
   const teamSections = teams.map(team => {
     const tc      = team.color || 'var(--light-green)';
     const players = Array.isArray(team.players) ? team.players : [];
     const playerEntries = players.map(player => {
-      const pName   = typeof player === 'string' ? player : player.name;
-      const phcp    = typeof player === 'object' ? player.playingHcp : null;
-      const current = (playerScoreData[team.id]||{})[pName]?.[h];
+      const pName    = typeof player === 'string' ? player : player.name;
+      const phcp     = typeof player === 'object' ? player.playingHcp : null;
+      const current  = (playerScoreData[team.id]||{})[pName]?.[h];
       const hcpLabel = phcp != null ? ` (${phcp})` : '';
       const strokes  = strokesOnHole(phcp, globalHoleSI[h]);
-      const dot      = strokes > 0 ? ' •' : '';
+      const dots     = strokes > 0 ? `<span class="stroke-dot">${'●'.repeat(Math.min(strokes,2))}</span>` : '';
       const safe     = pName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
       const btns     = Array.from({length:9}, (_,i) => {
         const v   = i + 1;
@@ -2379,15 +2402,47 @@ function renderHoleEntry(day, teams, el) {
         return `<button class="sc-score-btn${sel}" onclick="scoreButtonClick('${team.id}','${safe}',${h},${v},'${day}')">${v}</button>`;
       }).join('');
       return `<div class="hole-player-entry">
-        <span class="hole-player-name">${pName}${hcpLabel}${dot}</span>
+        <span class="hole-player-name">${pName}${hcpLabel}${dots}</span>
         <div class="score-btns">${btns}</div>
       </div>`;
     }).join('');
     return `<div class="hole-teams-entry" style="border-top:1px solid ${tc}44">
-      <div style="padding:5px 12px 2px;font-size:.72rem;color:${tc};letter-spacing:.07em;font-weight:700">${team.name}</div>
+      <div class="hole-team-hdr" style="color:${tc}">${team.name}</div>
       ${playerEntries}
     </div>`;
   }).join('');
+
+  // Summary table: net Out / In / Total per team + match status
+  let summaryHtml = '';
+  if (ms) {
+    const fmt = v => v != null ? String(v) : '--';
+    const rows = ms.teamData.map(td => `<tr>
+      <td style="color:${td.color};font-size:.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;padding-right:4px">${td.name}</td>
+      <td class="mc${td.out   !=null?' v':''}">${fmt(td.out)}</td>
+      <td class="mc${td.in    !=null?' v':''}">${fmt(td.in)}</td>
+      <td class="mc${td.total !=null?' v':''}">${fmt(td.total)}</td>
+    </tr>`).join('');
+
+    let statusRow = '';
+    if (ms.match && ms.match.thru > 0) {
+      const { aUp, thru, aName, bName, aColor, bColor } = ms.match;
+      if (aUp === 0) {
+        statusRow = `<tr><td colspan="4" class="match-status-cell"><span class="m-as">ALL SQUARE</span> <span class="hm-sub">thru ${thru}</span></td></tr>`;
+      } else {
+        const leader = aUp > 0 ? aName : bName;
+        const clr    = (aUp > 0 ? aColor : bColor) || 'var(--sand)';
+        statusRow = `<tr><td colspan="4" class="match-status-cell"><span class="m-lead" style="color:${clr}">${leader} +${Math.abs(aUp)}</span> <span class="hm-sub">thru ${thru}</span></td></tr>`;
+      }
+    }
+
+    summaryHtml = `<div class="match-summary">
+      <table class="match-tbl">
+        <tr class="match-tbl-hdr"><td></td><td class="mc">OUT</td><td class="mc">IN</td><td class="mc">TOT</td></tr>
+        ${rows}
+        ${statusRow}
+      </table>
+    </div>`;
+  }
 
   el.innerHTML = `<div class="scorecard-panel">
     <div class="scorecard-header">
@@ -2402,14 +2457,16 @@ function renderHoleEntry(day, teams, el) {
     </div>
     <div class="hole-nav">
       <button class="hole-nav-btn" onclick="setCurrentHole(${h-1},'${day}')"${h<=1?' disabled':''}>← Prev</button>
-      <div style="text-align:center">
+      <div class="hole-info-center">
         <div class="hole-num-big">Hole ${h}</div>
         <div class="hole-meta-line">PAR ${par} · HCP ${si}</div>
+        ${matchBadge}
       </div>
       <button class="hole-nav-btn" onclick="setCurrentHole(${h+1},'${day}')"${h>=18?' disabled':''}>Next →</button>
     </div>
     <div class="hole-pips">${pips}</div>
     ${teamSections}
+    ${summaryHtml}
   </div>`;
 }
 
@@ -2435,6 +2492,73 @@ function scoreButtonClick(teamId, playerName, hole, score, day) {
     if (entryEl) renderHoleEntry(d, savedTeams[d] || [], entryEl);
   }
   savePlayerScore(teamId, playerName, hole, newScore != null ? String(newScore) : '');
+  // Auto-advance when all players have scored this hole
+  if (newScore != null && hole < 18 && _viewMode === 'entry' && allScoredOnHole(d, hole)) {
+    clearTimeout(_autoAdvanceTimer);
+    _autoAdvanceTimer = setTimeout(() => {
+      if (_currentHole === hole) setCurrentHole(hole + 1, d);
+    }, 800);
+  }
+}
+
+function allScoredOnHole(day, hole) {
+  const teams = savedTeams[day] || [];
+  if (!teams.length) return false;
+  return teams.every(team => {
+    const players = Array.isArray(team.players) ? team.players : [];
+    return players.length > 0 && players.every(player => {
+      const pName = typeof player === 'string' ? player : player.name;
+      return (playerScoreData[team.id]||{})[pName]?.[hole] != null;
+    });
+  });
+}
+
+function computeMatchState(day, teams) {
+  if (!teams.length) return null;
+  const si = globalHoleSI;
+  const teamData = teams.map(team => {
+    const players = Array.isArray(team.players) ? team.players : [];
+    const bb = team.best_balls || 1;
+    const holeNets = {};
+    for (let h = 1; h <= 18; h++) {
+      const nets = []; let allIn = true;
+      players.forEach(player => {
+        const pName = typeof player === 'string' ? player : player.name;
+        const phcp  = typeof player === 'object' ? player.playingHcp : null;
+        const gross = (playerScoreData[team.id]||{})[pName]?.[h];
+        if (gross == null) { allIn = false; return; }
+        nets.push(gross - strokesOnHole(phcp, si[h]));
+      });
+      if (allIn && nets.length > 0) {
+        nets.sort((a,b)=>a-b);
+        holeNets[h] = nets.slice(0, Math.min(bb, nets.length)).reduce((s,v)=>s+v, 0);
+      }
+    }
+    let out=0,outC=0,inn=0,inC=0;
+    for (let h=1;  h<=9;  h++) if (holeNets[h]!=null){out+=holeNets[h];outC++;}
+    for (let h=10; h<=18; h++) if (holeNets[h]!=null){inn+=holeNets[h];inC++;}
+    return {
+      teamId: team.id, name: team.name, color: team.color||'var(--light-green)',
+      holeNets,
+      out:   outC>0 ? out  : null,
+      in:    inC>0  ? inn  : null,
+      total: (outC+inC)>0 ? out+inn : null,
+    };
+  });
+  let match = null;
+  if (teams.length === 2) {
+    const [a, b] = teamData;
+    let aUp=0, thru=0;
+    for (let h=1; h<=18; h++) {
+      if (a.holeNets[h]!=null && b.holeNets[h]!=null) {
+        if      (a.holeNets[h] < b.holeNets[h]) aUp++;
+        else if (b.holeNets[h] < a.holeNets[h]) aUp--;
+        thru++;
+      }
+    }
+    match = { aUp, thru, aName:a.name, bName:b.name, aColor:a.color, bColor:b.color };
+  }
+  return { teamData, match };
 }
 
 async function deleteScorecard(day) {
