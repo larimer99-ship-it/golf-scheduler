@@ -1093,7 +1093,11 @@ function renderGroup(day, g, gi, container) {
   renderGroupChips(day, g);
 
   document.getElementById('gt-'+g.id).addEventListener('change', () => {
-    g.time = document.getElementById('gt-'+g.id).value;
+    const inp = document.getElementById('gt-'+g.id);
+    const newTime = inp.value;
+    const label = newTime ? formatTime(newTime) : 'no time';
+    if (!confirm(`Set tee time to ${label}?`)) { inp.value = g.time || ''; return; }
+    g.time = newTime;
     const d = document.getElementById('gtd-'+g.id);
     if (d) d.textContent = g.time ? formatTime(g.time) : 'No time set';
     updateCardBadge(day); updateStats();
