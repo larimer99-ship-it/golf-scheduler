@@ -63,6 +63,8 @@
   .btn-remove-tee:hover { background:rgba(192,57,43,0.2); }
   .btn-add-tee { margin-top:12px; background:rgba(45,106,79,0.4); border:1px solid rgba(82,183,136,0.4); border-radius:3px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); letter-spacing:0.08em; padding:7px 14px; transition:background 0.2s; }
   .btn-add-tee:hover { background:rgba(45,106,79,0.7); }
+  .btn-text-group { background:rgba(30,90,60,0.5); border:1px solid rgba(82,183,136,0.5); border-radius:3px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.68rem,1.5vw,0.78rem); letter-spacing:0.06em; padding:6px 12px; transition:background 0.2s; white-space:nowrap; }
+  .btn-text-group:hover { background:rgba(82,183,136,0.25); }
   .tee-setup-hint { margin-top:10px; font-size:clamp(0.58rem,1.3vw,0.66rem); color:var(--light-green); opacity:0.6; letter-spacing:0.06em; }
 
   /* Summary bar */
@@ -1040,6 +1042,23 @@ async function saveTeeTime(g, day) {
   } catch(e) { console.error('saveTeeTime:', e); }
 }
 
+function textGroup(day, gid) {
+  const g = (state[day]?.groups || []).find(x => x.id === gid);
+  if (!g) return;
+
+  const course = document.getElementById('courseName')?.value?.trim() || 'the course';
+  const d = new Date(day + 'T12:00:00');
+  const dateLabel = d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+  const timeLabel = g.time ? formatTime(g.time) : 'TBD';
+  const holes = g.holes || '18';
+  const players = (g.players || []).map(p => p.name).filter(Boolean);
+  const playerLine = players.length ? players.join(', ') : 'No players assigned yet';
+  const notesLine = g.notes ? `\nNotes: ${g.notes}` : '';
+
+  const msg = `⛳ Tee Time Confirmed!\n${dateLabel} at ${timeLabel}\n${holes} holes · ${course}\nGroup: ${playerLine}${notesLine}`;
+  window.location.href = 'sms:?&body=' + encodeURIComponent(msg);
+}
+
 function renderDay(day) {
   const container = document.getElementById('groups-' + day);
   container.innerHTML = '';
@@ -1064,6 +1083,7 @@ function renderGroup(day, g, gi, container) {
       <span class="tee-group-num">TEE TIME ${gi+1}</span>
       <span class="tee-group-time-display" id="gtd-${g.id}">${g.time ? formatTime(g.time) : 'No time set'}</span>
       <span class="tee-group-players-count" id="gpc-${g.id}" style="${pCount>=4?'color:#f0c520':''}">${pCount}/4 players</span>
+      <button class="btn-text-group" onclick="textGroup('${day}','${g.id}')">📱 Text Group</button>
       <button class="btn-remove-group" onclick="removeGroup('${day}','${g.id}')">✕ Remove</button>
     </div>
     <div class="tee-group-body">
