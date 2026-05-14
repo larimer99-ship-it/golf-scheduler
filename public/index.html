@@ -65,8 +65,6 @@
   .btn-add-tee:hover { background:rgba(45,106,79,0.7); }
   .btn-text-group { background:rgba(30,90,60,0.5); border:1px solid rgba(82,183,136,0.5); border-radius:3px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.68rem,1.5vw,0.78rem); letter-spacing:0.06em; padding:6px 12px; transition:background 0.2s; white-space:nowrap; }
   .btn-text-group:hover { background:rgba(82,183,136,0.25); }
-  .btn-commit-time { width:100%; margin-top:8px; background:rgba(82,183,136,0.25); border:1px solid rgba(82,183,136,0.7); border-radius:4px; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); font-weight:700; letter-spacing:0.06em; padding:8px 12px; transition:background 0.2s; }
-  .btn-commit-time:hover { background:rgba(82,183,136,0.4); }
   .tee-setup-hint { margin-top:10px; font-size:clamp(0.58rem,1.3vw,0.66rem); color:var(--light-green); opacity:0.6; letter-spacing:0.06em; }
 
   /* Summary bar */
@@ -553,6 +551,21 @@
   </div>
 </div>
 
+<!-- Tee time confirm modal -->
+<div id="teeConfirmModal" class="modal-overlay" onclick="teeConfirmCancel()">
+  <div class="modal-box" style="max-width:300px" onclick="event.stopPropagation()">
+    <div style="padding:24px 24px 12px;text-align:center">
+      <div style="font-family:'Playfair Display',serif;font-size:0.85rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--sand);margin-bottom:14px">Confirm Tee Time</div>
+      <div id="teeConfirmTimeLabel" style="font-size:2.2rem;font-weight:700;color:var(--white);letter-spacing:0.02em">—</div>
+      <div id="teeConfirmDateLabel" style="font-size:0.78rem;color:var(--pale-green);opacity:0.75;margin-top:6px"></div>
+    </div>
+    <div class="qa-footer" style="padding:8px 20px 20px">
+      <button class="qa-cancel" onclick="teeConfirmCancel()">Cancel</button>
+      <button class="qa-save" onclick="teeConfirmSave()">⛳ Set Time</button>
+    </div>
+  </div>
+</div>
+
 <!-- Quick-add tee time modal -->
 <div id="qaModal" class="modal-overlay" onclick="qaClose()">
   <div class="modal-box" onclick="event.stopPropagation()" style="max-width:520px">
@@ -923,13 +936,11 @@ async function syncFromAPI() {
       apiId: p.id, name: p.name,
       handicap: p.handicap != null ? String(p.handicap) : ''
     }));
-    // Snapshot locally-dirty and pending groups before clearing state
+    // Snapshot locally-dirty groups before clearing state
     const dirtyGroups = {};
-    const pendingTimes = {};
     Object.keys(state).forEach(d => {
       (state[d].groups || []).forEach(g => {
         if (g.apiId && g._dirty) dirtyGroups[g.apiId] = g;
-        if (g.apiId && g._pendingTime !== undefined) pendingTimes[g.apiId] = g._pendingTime;
       });
     });
     Object.keys(state).forEach(d => { state[d].groups = []; });
@@ -945,7 +956,6 @@ async function syncFromAPI() {
         holes: isRecentlyDirty ? dirty.holes : holes,
         notes: isRecentlyDirty ? dirty.notes : notes,
         _dirty: dirty?._dirty,
-        _pendingTime: pendingTimes[tt.id],
         players: (tt.players||[]).map(p => ({
           name:        p.name,
           apiId:       p.id,
@@ -990,7 +1000,7 @@ async function addGroup(day) {
     });
     g.apiId = result.id;
     g.id    = 'api_' + result.id;
-    // Re-render so DOM ids match the new api id (preserves _pendingTime / commit button)
+    // Re-render so DOM ids match the new api id
     renderDay(day); updateCardBadge(day);
     // Flush any committed time/notes changes made while the POST was in-flight
     if (g.time || g.notes) saveTeeTime(g, day).catch(e => console.error(e));
@@ -1113,8 +1123,7 @@ function renderGroup(day, g, gi, container) {
       <div class="tee-group-fields">
         <div class="form-group">
           <label>Tee Time</label>
-          <input type="time" id="gt-${g.id}" value="${g._pendingTime !== undefined ? g._pendingTime : g.time}" />
-          <button id="gc-commit-${g.id}" class="btn-commit-time" style="display:${g._pendingTime !== undefined ? 'block' : 'none'}" onclick="commitTeeTime('${day}','${g.id}')">✓ Commit Changes</button>
+          <input type="time" id="gt-${g.id}" value="${g.time}" />
           <button class="btn-text-group admin-only" style="margin-top:6px;display:${isAdmin()?'':'none'}" onclick="textGroup('${day}','${g.id}')">📱 Text Group</button>
         </div>
         <div class="form-group">
@@ -1137,15 +1146,11 @@ function renderGroup(day, g, gi, container) {
   container.appendChild(div);
   renderGroupChips(day, g);
 
-  const _onTimeInput = () => {
+  document.getElementById('gt-'+g.id).addEventListener('change', () => {
     const inp = document.getElementById('gt-'+g.id);
     if (!inp || !inp.value) return;
-    g._pendingTime = inp.value;
-    const commitBtn = document.getElementById('gc-commit-'+g.id);
-    if (commitBtn) commitBtn.style.display = 'block';
-  };
-  document.getElementById('gt-'+g.id).addEventListener('change', _onTimeInput);
-  document.getElementById('gt-'+g.id).addEventListener('input',  _onTimeInput);
+    showTeeConfirm(day, g.id, inp.value, g.time);
+  });
   document.getElementById('gh-'+g.id).addEventListener('change', () => {
     g.holes = document.getElementById('gh-'+g.id).value;
     g._dirty = Date.now();
@@ -1158,23 +1163,39 @@ function renderGroup(day, g, gi, container) {
   });
 }
 
-function commitTeeTime(day, gid) {
+let _teeConfirmData = null;
+
+function showTeeConfirm(day, gid, newTime, prevTime) {
+  _teeConfirmData = { day, gid, time: newTime, prevTime };
+  document.getElementById('teeConfirmTimeLabel').textContent = formatTime(newTime);
+  const d = new Date(day + 'T12:00:00');
+  document.getElementById('teeConfirmDateLabel').textContent =
+    d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
+  document.getElementById('teeConfirmModal').classList.add('open');
+}
+
+function teeConfirmCancel() {
+  if (_teeConfirmData) {
+    const inp = document.getElementById('gt-'+_teeConfirmData.gid);
+    if (inp) inp.value = _teeConfirmData.prevTime || '';
+    _teeConfirmData = null;
+  }
+  document.getElementById('teeConfirmModal').classList.remove('open');
+}
+
+function teeConfirmSave() {
+  if (!_teeConfirmData) return;
+  const { day, gid, time } = _teeConfirmData;
+  _teeConfirmData = null;
+  document.getElementById('teeConfirmModal').classList.remove('open');
   const g = (state[day]?.groups || []).find(x => x.id === gid);
   if (!g) return;
-  const inp = document.getElementById('gt-'+gid);
-  if (!inp) return;
-  const newTime = g._pendingTime !== undefined ? g._pendingTime : inp.value;
-  g.time = newTime;
-  g._pendingTime = undefined;
+  g.time = time;
   g._dirty = Date.now();
   const d = document.getElementById('gtd-'+gid);
-  if (d) d.textContent = g.time ? formatTime(g.time) : 'No time set';
-  const commitBtn = document.getElementById('gc-commit-'+gid);
-  if (commitBtn) commitBtn.style.display = 'none';
+  if (d) d.textContent = formatTime(time);
   updateCardBadge(day); updateStats();
-  saveTeeTime(g, day).then(() => {
-    if (g.time) showToast(`⛳ Tee time set to ${formatTime(g.time)}`);
-  });
+  saveTeeTime(g, day).then(() => showToast(`⛳ Tee time set to ${formatTime(time)}`));
 }
 
 // ── Players ───────────────────────────────────────────────
@@ -1525,7 +1546,7 @@ function showAllPlayers() {
   document.getElementById('playersModal').classList.add('open');
 }
 function closePlayersModal(){document.getElementById('playersModal').classList.remove('open');}
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePlayersModal();closeTeeTimesModal();qaClose();closeHandicapEditor();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closePlayersModal();closeTeeTimesModal();qaClose();closeHandicapEditor();teeConfirmCancel();}});
 
 // ── Handicap Editor ────────────────────────────────────────
 async function showHandicapEditor() {
