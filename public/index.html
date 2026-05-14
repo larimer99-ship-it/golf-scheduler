@@ -990,7 +990,9 @@ async function addGroup(day) {
     });
     g.apiId = result.id;
     g.id    = 'api_' + result.id;
-    // Flush any time/holes/notes changes the user made while the POST was in-flight
+    // Re-render so DOM ids match the new api id (preserves _pendingTime / commit button)
+    renderDay(day); updateCardBadge(day);
+    // Flush any committed time/notes changes made while the POST was in-flight
     if (g.time || g.notes) saveTeeTime(g, day).catch(e => console.error(e));
   } catch(e) { showToast('⚠ Failed to save tee time'); console.error(e); }
 }
