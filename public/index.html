@@ -1130,8 +1130,6 @@ function renderGroup(day, g, gi, container) {
   document.getElementById('gt-'+g.id).addEventListener('change', () => {
     const inp = document.getElementById('gt-'+g.id);
     const newTime = inp.value;
-    const label = newTime ? formatTime(newTime) : 'no time';
-    if (!confirm(`Set tee time to ${label}?`)) { inp.value = g.time || ''; return; }
     g.time = newTime;
     g._dirty = Date.now();
     const d = document.getElementById('gtd-'+g.id);
