@@ -928,15 +928,13 @@ async function syncFromAPI() {
         if (g.apiId && g._dirty) dirtyGroups[g.apiId] = g;
       });
     });
-    const DIRTY_GRACE_MS = 15000;
-
     Object.keys(state).forEach(d => { state[d].groups = []; });
     teeTimes.forEach(tt => {
       const day = isoToDateStr(tt.tee_time);
       getDateState(day);
       const { holes, notes } = unpackNotes(tt.notes);
       const dirty = dirtyGroups[tt.id];
-      const isRecentlyDirty = dirty && (Date.now() - dirty._dirty < DIRTY_GRACE_MS);
+      const isRecentlyDirty = dirty != null;
       state[day].groups.push({
         id: 'api_'+tt.id, apiId: tt.id,
         time:  isRecentlyDirty ? dirty.time  : isoToTime(tt.tee_time),
@@ -1053,6 +1051,10 @@ async function saveTeeTime(g, day) {
       tee_time:  dateTimeToISO(day, g.time),
       notes:     packNotes(g.holes, g.notes),
     });
+    // Save confirmed — allow server to be authoritative on next sync
+    g._dirty = undefined;
+    const stateGroup = (state[day]?.groups || []).find(sg => sg.apiId === g.apiId);
+    if (stateGroup) stateGroup._dirty = undefined;
   } catch(e) { console.error('saveTeeTime:', e); }
 }
 
@@ -1135,7 +1137,9 @@ function renderGroup(day, g, gi, container) {
     const d = document.getElementById('gtd-'+g.id);
     if (d) d.textContent = g.time ? formatTime(g.time) : 'No time set';
     updateCardBadge(day); updateStats();
-    saveTeeTime(g, day);
+    saveTeeTime(g, day).then(() => {
+      if (g.time) showToast(`⛳ Tee time set to ${formatTime(g.time)}`);
+    });
   });
   document.getElementById('gh-'+g.id).addEventListener('change', () => {
     g.holes = document.getElementById('gh-'+g.id).value;
