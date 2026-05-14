@@ -65,6 +65,8 @@
   .btn-add-tee:hover { background:rgba(45,106,79,0.7); }
   .btn-text-group { background:rgba(30,90,60,0.5); border:1px solid rgba(82,183,136,0.5); border-radius:3px; color:var(--pale-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.68rem,1.5vw,0.78rem); letter-spacing:0.06em; padding:6px 12px; transition:background 0.2s; white-space:nowrap; }
   .btn-text-group:hover { background:rgba(82,183,136,0.25); }
+  .btn-commit-time { width:100%; margin-top:8px; background:rgba(82,183,136,0.25); border:1px solid rgba(82,183,136,0.7); border-radius:4px; color:var(--light-green); cursor:pointer; font-family:'Courier Prime',monospace; font-size:clamp(0.72rem,1.6vw,0.82rem); font-weight:700; letter-spacing:0.06em; padding:8px 12px; transition:background 0.2s; }
+  .btn-commit-time:hover { background:rgba(82,183,136,0.4); }
   .tee-setup-hint { margin-top:10px; font-size:clamp(0.58rem,1.3vw,0.66rem); color:var(--light-green); opacity:0.6; letter-spacing:0.06em; }
 
   /* Summary bar */
@@ -1107,6 +1109,7 @@ function renderGroup(day, g, gi, container) {
         <div class="form-group">
           <label>Tee Time</label>
           <input type="time" id="gt-${g.id}" value="${g.time}" />
+          <button id="gc-commit-${g.id}" class="btn-commit-time" style="display:none" onclick="commitTeeTime('${day}','${g.id}')">✓ Commit Changes</button>
           <button class="btn-text-group admin-only" style="margin-top:6px;display:${isAdmin()?'':'none'}" onclick="textGroup('${day}','${g.id}')">📱 Text Group</button>
         </div>
         <div class="form-group">
@@ -1131,15 +1134,9 @@ function renderGroup(day, g, gi, container) {
 
   document.getElementById('gt-'+g.id).addEventListener('change', () => {
     const inp = document.getElementById('gt-'+g.id);
-    const newTime = inp.value;
-    g.time = newTime;
-    g._dirty = Date.now();
-    const d = document.getElementById('gtd-'+g.id);
-    if (d) d.textContent = g.time ? formatTime(g.time) : 'No time set';
-    updateCardBadge(day); updateStats();
-    saveTeeTime(g, day).then(() => {
-      if (g.time) showToast(`⛳ Tee time set to ${formatTime(g.time)}`);
-    });
+    const pendingTime = inp.value;
+    const commitBtn = document.getElementById('gc-commit-'+g.id);
+    if (commitBtn) commitBtn.style.display = pendingTime ? 'block' : 'none';
   });
   document.getElementById('gh-'+g.id).addEventListener('change', () => {
     g.holes = document.getElementById('gh-'+g.id).value;
@@ -1150,6 +1147,24 @@ function renderGroup(day, g, gi, container) {
     g.notes = document.getElementById('gn-'+g.id).value;
     g._dirty = Date.now();
     saveTeeTime(g, day);
+  });
+}
+
+function commitTeeTime(day, gid) {
+  const g = (state[day]?.groups || []).find(x => x.id === gid);
+  if (!g) return;
+  const inp = document.getElementById('gt-'+gid);
+  if (!inp) return;
+  const newTime = inp.value;
+  g.time = newTime;
+  g._dirty = Date.now();
+  const d = document.getElementById('gtd-'+gid);
+  if (d) d.textContent = g.time ? formatTime(g.time) : 'No time set';
+  const commitBtn = document.getElementById('gc-commit-'+gid);
+  if (commitBtn) commitBtn.style.display = 'none';
+  updateCardBadge(day); updateStats();
+  saveTeeTime(g, day).then(() => {
+    if (g.time) showToast(`⛳ Tee time set to ${formatTime(g.time)}`);
   });
 }
 
