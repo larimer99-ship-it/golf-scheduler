@@ -921,14 +921,28 @@ async function syncFromAPI() {
       apiId: p.id, name: p.name,
       handicap: p.handicap != null ? String(p.handicap) : ''
     }));
+    // Snapshot locally-dirty groups before clearing state
+    const dirtyGroups = {};
+    Object.keys(state).forEach(d => {
+      (state[d].groups || []).forEach(g => {
+        if (g.apiId && g._dirty) dirtyGroups[g.apiId] = g;
+      });
+    });
+    const DIRTY_GRACE_MS = 15000;
+
     Object.keys(state).forEach(d => { state[d].groups = []; });
     teeTimes.forEach(tt => {
       const day = isoToDateStr(tt.tee_time);
       getDateState(day);
       const { holes, notes } = unpackNotes(tt.notes);
+      const dirty = dirtyGroups[tt.id];
+      const isRecentlyDirty = dirty && (Date.now() - dirty._dirty < DIRTY_GRACE_MS);
       state[day].groups.push({
         id: 'api_'+tt.id, apiId: tt.id,
-        time: isoToTime(tt.tee_time), holes, notes,
+        time:  isRecentlyDirty ? dirty.time  : isoToTime(tt.tee_time),
+        holes: isRecentlyDirty ? dirty.holes : holes,
+        notes: isRecentlyDirty ? dirty.notes : notes,
+        _dirty: dirty?._dirty,
         players: (tt.players||[]).map(p => ({
           name:        p.name,
           apiId:       p.id,
@@ -1119,6 +1133,7 @@ function renderGroup(day, g, gi, container) {
     const label = newTime ? formatTime(newTime) : 'no time';
     if (!confirm(`Set tee time to ${label}?`)) { inp.value = g.time || ''; return; }
     g.time = newTime;
+    g._dirty = Date.now();
     const d = document.getElementById('gtd-'+g.id);
     if (d) d.textContent = g.time ? formatTime(g.time) : 'No time set';
     updateCardBadge(day); updateStats();
@@ -1126,10 +1141,12 @@ function renderGroup(day, g, gi, container) {
   });
   document.getElementById('gh-'+g.id).addEventListener('change', () => {
     g.holes = document.getElementById('gh-'+g.id).value;
+    g._dirty = Date.now();
     saveTeeTime(g, day);
   });
   document.getElementById('gn-'+g.id).addEventListener('input', () => {
     g.notes = document.getElementById('gn-'+g.id).value;
+    g._dirty = Date.now();
     saveTeeTime(g, day);
   });
 }
