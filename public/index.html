@@ -923,11 +923,13 @@ async function syncFromAPI() {
       apiId: p.id, name: p.name,
       handicap: p.handicap != null ? String(p.handicap) : ''
     }));
-    // Snapshot locally-dirty groups before clearing state
+    // Snapshot locally-dirty and pending groups before clearing state
     const dirtyGroups = {};
+    const pendingTimes = {};
     Object.keys(state).forEach(d => {
       (state[d].groups || []).forEach(g => {
         if (g.apiId && g._dirty) dirtyGroups[g.apiId] = g;
+        if (g.apiId && g._pendingTime !== undefined) pendingTimes[g.apiId] = g._pendingTime;
       });
     });
     Object.keys(state).forEach(d => { state[d].groups = []; });
@@ -943,6 +945,7 @@ async function syncFromAPI() {
         holes: isRecentlyDirty ? dirty.holes : holes,
         notes: isRecentlyDirty ? dirty.notes : notes,
         _dirty: dirty?._dirty,
+        _pendingTime: pendingTimes[tt.id],
         players: (tt.players||[]).map(p => ({
           name:        p.name,
           apiId:       p.id,
@@ -1108,8 +1111,8 @@ function renderGroup(day, g, gi, container) {
       <div class="tee-group-fields">
         <div class="form-group">
           <label>Tee Time</label>
-          <input type="time" id="gt-${g.id}" value="${g.time}" />
-          <button id="gc-commit-${g.id}" class="btn-commit-time" style="display:none" onclick="commitTeeTime('${day}','${g.id}')">✓ Commit Changes</button>
+          <input type="time" id="gt-${g.id}" value="${g._pendingTime !== undefined ? g._pendingTime : g.time}" />
+          <button id="gc-commit-${g.id}" class="btn-commit-time" style="display:${g._pendingTime !== undefined ? 'block' : 'none'}" onclick="commitTeeTime('${day}','${g.id}')">✓ Commit Changes</button>
           <button class="btn-text-group admin-only" style="margin-top:6px;display:${isAdmin()?'':'none'}" onclick="textGroup('${day}','${g.id}')">📱 Text Group</button>
         </div>
         <div class="form-group">
@@ -1132,12 +1135,15 @@ function renderGroup(day, g, gi, container) {
   container.appendChild(div);
   renderGroupChips(day, g);
 
-  document.getElementById('gt-'+g.id).addEventListener('change', () => {
+  const _onTimeInput = () => {
     const inp = document.getElementById('gt-'+g.id);
-    const pendingTime = inp.value;
+    if (!inp || !inp.value) return;
+    g._pendingTime = inp.value;
     const commitBtn = document.getElementById('gc-commit-'+g.id);
-    if (commitBtn) commitBtn.style.display = pendingTime ? 'block' : 'none';
-  });
+    if (commitBtn) commitBtn.style.display = 'block';
+  };
+  document.getElementById('gt-'+g.id).addEventListener('change', _onTimeInput);
+  document.getElementById('gt-'+g.id).addEventListener('input',  _onTimeInput);
   document.getElementById('gh-'+g.id).addEventListener('change', () => {
     g.holes = document.getElementById('gh-'+g.id).value;
     g._dirty = Date.now();
@@ -1155,8 +1161,9 @@ function commitTeeTime(day, gid) {
   if (!g) return;
   const inp = document.getElementById('gt-'+gid);
   if (!inp) return;
-  const newTime = inp.value;
+  const newTime = g._pendingTime !== undefined ? g._pendingTime : inp.value;
   g.time = newTime;
+  g._pendingTime = undefined;
   g._dirty = Date.now();
   const d = document.getElementById('gtd-'+gid);
   if (d) d.textContent = g.time ? formatTime(g.time) : 'No time set';
