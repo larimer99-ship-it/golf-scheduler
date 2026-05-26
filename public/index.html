@@ -460,6 +460,15 @@
   .hcp-add-footer { display:flex; align-items:center; gap:8px; padding:12px 18px; border-top:1px solid rgba(82,183,136,0.15); flex-shrink:0; }
   .hcp-add-footer .hcp-editor-input { width:auto; flex:1; }
   .hcp-add-footer .hcp-hcp-input { width:70px; }
+  /* 9s Game */
+  .sc-9s-net-row td { background:rgba(0,0,0,0.1); font-size:clamp(.6rem,1.2vw,.68rem); }
+  .sc-9s-pts-row td { background:rgba(82,183,136,0.07); border-bottom:1px solid rgba(82,183,136,0.12); }
+  .sc-9s-5 { color:#f0c520; font-weight:700; }
+  .sc-9s-4 { color:#52b788; font-weight:700; }
+  .sc-9s-3 { color:var(--cream); }
+  .sc-9s-2 { color:rgba(245,240,232,0.5); }
+  .sc-9s-1 { color:#e74c3c; }
+  .sc-9s-pts-tot { color:var(--sand); font-weight:700; }
 </style>
 </head>
 <body>
@@ -2295,6 +2304,7 @@ function renderScorecard(day) {
   }
 
   if (_viewMode === 'entry') { renderHoleEntry(day, teams, el); return; }
+  if (_viewMode === '9s')    { renderNinesGame(day, teams, el); return; }
 
   const holeNums = Array.from({length:18}, (_,i) => i+1);
   const si       = globalHoleSI;
@@ -2425,6 +2435,7 @@ function renderScorecard(day) {
 
   const hFront = holeNums.slice(0,9).map(h=>`<th>${h}</th>`).join('');
   const hBack  = holeNums.slice(9).map(h=>`<th>${h}</th>`).join('');
+  const has3p  = teams.some(t => Array.isArray(t.players) && t.players.length === 3);
 
   el.innerHTML = `<div class="scorecard-panel">
     <div class="scorecard-header">
@@ -2436,6 +2447,7 @@ function renderScorecard(day) {
     <div class="view-toggle">
       <button class="view-tab" onclick="setViewMode('entry','${day}')">Hole Entry</button>
       <button class="view-tab on" onclick="setViewMode('table','${day}')">Full Card</button>
+      ${has3p ? `<button class="view-tab" onclick="setViewMode('9s','${day}')">9s Game</button>` : ''}
     </div>
     <div class="scorecard-scroll">
       <table class="scorecard-table">
@@ -2532,6 +2544,7 @@ function renderHoleEntry(day, teams, el) {
     </div>`;
   }
 
+  const has3pEntry = teams.some(t => Array.isArray(t.players) && t.players.length === 3);
   el.innerHTML = `<div class="scorecard-panel">
     <div class="scorecard-header">
       <span class="scorecard-title">📋 Scorecard</span>
@@ -2542,6 +2555,7 @@ function renderHoleEntry(day, teams, el) {
     <div class="view-toggle">
       <button class="view-tab on" onclick="setViewMode('entry','${day}')">Hole Entry</button>
       <button class="view-tab" onclick="setViewMode('table','${day}')">Full Card</button>
+      ${has3pEntry ? `<button class="view-tab" onclick="setViewMode('9s','${day}')">9s Game</button>` : ''}
     </div>
     <div class="hole-nav">
       <button class="hole-nav-btn" onclick="setCurrentHole(${h-1},'${day}')"${h<=1?' disabled':''}>← Prev</button>
@@ -2636,6 +2650,138 @@ function computeMatchState(day, teams) {
     };
   });
   return { teamData };
+}
+
+function computeNinePoints(nets) {
+  const sorted = [...nets].sort((a, b) => a - b);
+  const [lo, mid, hi] = sorted;
+  if (lo === mid && mid === hi) return nets.map(() => 3);           // all tie → 3-3-3
+  if (lo === mid)               return nets.map(n => n === lo ? 4 : 1); // two tied low → 4-4-1
+  if (mid === hi)               return nets.map(n => n === lo ? 5 : 2); // one low, two tie → 5-2-2
+  return nets.map(n => n === lo ? 5 : n === hi ? 1 : 3);           // all different → 5-3-1
+}
+
+function renderNinesGame(day, teams, el) {
+  const holeNums = Array.from({length: 18}, (_, i) => i + 1);
+  const si  = globalHoleSI;
+  const par = globalHolePar;
+
+  const parOut = holeNums.slice(0, 9).reduce((s, h) => s + (par[h] || 0), 0);
+  const parIn  = holeNums.slice(9).reduce((s, h)  => s + (par[h] || 0), 0);
+  const parRow = `<tr class="sc-par-row">
+    <td class="sc-label-td sc-par-label">PAR</td>
+    ${holeNums.slice(0, 9).map(h => `<td class="sc-par-cell">${par[h] || '-'}</td>`).join('')}
+    <td class="sc-sub-td sc-par-sub">${parOut || ''}</td>
+    ${holeNums.slice(9).map(h => `<td class="sc-par-cell">${par[h] || '-'}</td>`).join('')}
+    <td class="sc-sub-td sc-par-sub">${parIn || ''}</td>
+    <td class="sc-tot-td sc-par-sub">${(parOut + parIn) || ''}</td>
+  </tr>`;
+
+  const siRow = `<tr class="sc-hcp-row">
+    <td class="sc-label-td sc-hcp-label">HCP</td>
+    ${holeNums.slice(0, 9).map(h => `<td class="sc-si-cell">${si[h] || '-'}</td>`).join('')}
+    <td class="sc-sub-td"></td>
+    ${holeNums.slice(9).map(h => `<td class="sc-si-cell">${si[h] || '-'}</td>`).join('')}
+    <td class="sc-sub-td"></td>
+    <td class="sc-tot-td"></td>
+  </tr>`;
+
+  const teamSections = teams
+    .filter(team => Array.isArray(team.players) && team.players.length === 3)
+    .map(team => {
+      const tc      = team.color || 'var(--light-green)';
+      const players = team.players;
+      const pNames  = players.map(p => typeof p === 'string' ? p : p.name);
+      const pHcps   = players.map(p => typeof p === 'object' ? p.playingHcp : null);
+
+      // Compute net scores and 9s points per hole
+      const holeNets = {};
+      const holePts  = {};
+      holeNums.forEach(h => {
+        const nets = pNames.map((name, i) => {
+          const gross = (playerScoreData[team.id] || {})[name]?.[h];
+          return gross != null ? gross - strokesOnHole(pHcps[i], si[h]) : null;
+        });
+        if (nets.every(n => n !== null)) {
+          holeNets[h] = nets;
+          holePts[h]  = computeNinePoints(nets);
+        }
+      });
+
+      // Build one net row + one points row per player
+      const playerPairs = pNames.map((pName, i) => {
+        const hcpLabel = pHcps[i] != null ? ` (${pHcps[i]})` : '';
+
+        // Net score row
+        let netF = 0, netB = 0, netFc = 0, netBc = 0;
+        const netCells = holeNums.map(h => {
+          const n = holeNets[h] ? holeNets[h][i] : null;
+          if (n != null) { if (h <= 9) { netF += n; netFc++; } else { netB += n; netBc++; } }
+          return `<td>${n != null ? n : ''}</td>`;
+        });
+
+        // Points row
+        let ptsF = 0, ptsB = 0, ptsFc = 0, ptsBc = 0;
+        const ptsCells = holeNums.map(h => {
+          const pts = holePts[h] ? holePts[h][i] : null;
+          if (pts != null) { if (h <= 9) { ptsF += pts; ptsFc++; } else { ptsB += pts; ptsBc++; } }
+          const cls = pts != null ? `sc-9s-${pts}` : '';
+          return `<td class="${cls}">${pts != null ? pts : ''}</td>`;
+        });
+
+        return `<tr class="sc-9s-net-row">
+          <td class="sc-label-td sc-player-label">${pName}${hcpLabel} <span style="opacity:.5;font-size:.75em">NET</span></td>
+          ${netCells.slice(0, 9).join('')}
+          <td class="sc-sub-td">${netFc ? netF : ''}</td>
+          ${netCells.slice(9).join('')}
+          <td class="sc-sub-td">${netBc ? netB : ''}</td>
+          <td class="sc-tot-td">${(netFc || netBc) ? netF + netB : ''}</td>
+        </tr>
+        <tr class="sc-9s-pts-row">
+          <td class="sc-label-td sc-player-label" style="font-weight:700;padding-left:20px">9s Pts</td>
+          ${ptsCells.slice(0, 9).join('')}
+          <td class="sc-sub-td sc-9s-pts-tot">${ptsFc ? ptsF : ''}</td>
+          ${ptsCells.slice(9).join('')}
+          <td class="sc-sub-td sc-9s-pts-tot">${ptsBc ? ptsB : ''}</td>
+          <td class="sc-tot-td sc-9s-pts-tot">${(ptsFc || ptsBc) ? ptsF + ptsB : ''}</td>
+        </tr>`;
+      });
+
+      return `<tr><td class="sc-label-td sc-team-header-td" colspan="22" style="color:${tc};border-top-color:${tc}44">${team.name}</td></tr>
+        ${playerPairs.join('')}`;
+    }).join('');
+
+  const has3p  = teams.some(t => Array.isArray(t.players) && t.players.length === 3);
+  const hFront = holeNums.slice(0, 9).map(h => `<th>${h}</th>`).join('');
+  const hBack  = holeNums.slice(9).map(h => `<th>${h}</th>`).join('');
+
+  el.innerHTML = `<div class="scorecard-panel">
+    <div class="scorecard-header">
+      <span class="scorecard-title">⛳ 9s Game</span>
+      <span class="live-dot">● LIVE</span>
+      ${isAdmin() ? `<button class="btn-delete-sc" onclick="deleteScorecard('${day}')">🗑 Clear Scores</button><button class="btn-delete-sc" onclick="deleteFullScorecard('${day}')" style="margin-left:4px">🗑 Delete Scorecard</button>` : ''}
+      <button class="btn-close-sc" onclick="closeScorecard('${day}')">✕</button>
+    </div>
+    <div class="view-toggle">
+      <button class="view-tab" onclick="setViewMode('entry','${day}')">Hole Entry</button>
+      <button class="view-tab" onclick="setViewMode('table','${day}')">Full Card</button>
+      <button class="view-tab on" onclick="setViewMode('9s','${day}')">9s Game</button>
+    </div>
+    <div class="scorecard-scroll">
+      <table class="scorecard-table">
+        <thead>
+          <tr>
+            <th class="sc-label-th"></th>
+            ${hFront}<th class="sc-sub-th">OUT</th>${hBack}
+            <th class="sc-sub-th">IN</th><th class="sc-tot-th">TOT</th>
+          </tr>
+          ${parRow}
+          ${siRow}
+        </thead>
+        <tbody>${teamSections || '<tr><td colspan="22" style="padding:14px;opacity:.55;font-style:italic">No 3-player team found.</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>`;
 }
 
 async function _adminDelete(url, confirmMsg) {
