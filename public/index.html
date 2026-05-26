@@ -2216,9 +2216,9 @@ function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, 
         <button class="btn-close-teams" onclick="document.getElementById('teams-${day}').innerHTML=''">✕</button>
       </div>
     </div>
+    ${ninesPrompt}
     <div class="teams-grid">${teamCardsHtml}</div>
     <div class="teams-method">${method}</div>
-    ${ninesPrompt}
   </div>`;
   saveTeamsToDB(day, teams, bestBalls);
 }
