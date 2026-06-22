@@ -1106,13 +1106,10 @@ function textGroup(day, gid) {
   const d = new Date(day + 'T12:00:00');
   const dateLabel = d.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric' });
   const timeLabel = g.time ? formatTime(g.time) : 'TBD';
-  const holes = g.holes || '18';
-  const players = (g.players || []).map(p => p.name).filter(Boolean);
-  const playerLine = players.length ? players.join(', ') : 'No players assigned yet';
   const notesLine = g.notes ? `\nNotes: ${g.notes}` : '';
 
   const siteUrl = window.location.origin;
-  const msg = `⛳ Tee Time Confirmed!\n${dateLabel} at ${timeLabel}\n${holes} holes · ${course}\nGroup: ${playerLine}${notesLine}\n\nSign up & view schedule: ${siteUrl}`;
+  const msg = `⛳ Tee Time Confirmed!\n${dateLabel} at ${timeLabel}${notesLine}\n\nSign up & view schedule: ${siteUrl}`;
   window.location.href = 'sms:?&body=' + encodeURIComponent(msg);
 }
 
