@@ -1867,10 +1867,6 @@ function qaRender() {
     <div class="qa-section"><div class="qa-row">
       <div><div class="qa-label">Tee Time</div>
         <input type="time" id="qaTime" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(82,183,136,0.25);border-radius:3px;color:var(--cream);font-family:'Courier Prime',monospace;font-size:max(16px,0.9rem);padding:8px 10px;outline:none" /></div>
-      <div><div class="qa-label">Holes</div>
-        <select id="qaHoles" style="width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(82,183,136,0.25);border-radius:3px;color:var(--cream);font-family:'Courier Prime',monospace;font-size:max(16px,0.9rem);padding:8px 10px;outline:none">
-          ${HOLES.map(h=>`<option>${h}</option>`).join('')}
-        </select></div>
     </div></div>
     <div class="qa-section">
       <div class="qa-label">Players ${count>0?`<span class="qa-count">${count}/4</span>`:''}</div>
@@ -1899,7 +1895,6 @@ function qaRemoveNew(i){_qaNew.splice(i,1);qaRender();}
 async function qaSave() {
   const day=_qaDay;
   const time =(document.getElementById('qaTime') ||{}).value||'';
-  const holes=(document.getElementById('qaHoles')||{}).value||'18 Holes';
   if (!day) return;
 
   const players=[];
@@ -1924,12 +1919,12 @@ async function qaSave() {
     if (!p.selectedTee && blueTee) p.selectedTee = String(blueTee.apiId || blueTee.id);
   }
 
-  const group=newGroup(); group.time=time; group.holes=holes; group.players=players;
+  const group=newGroup(); group.time=time; group.players=players;
   state[day].groups.push(group);
 
   try {
     const courseId=await ensureCourse();
-    const result=await apiFetch('POST','/tee-times',{course_id:courseId,tee_time:dateTimeToISO(day,time),max_players:4,notes:packNotes(holes,'')});
+    const result=await apiFetch('POST','/tee-times',{course_id:courseId,tee_time:dateTimeToISO(day,time),max_players:4,notes:packNotes('18 Holes','')});
     group.apiId=result.id; group.id='api_'+result.id;
     for (const p of players) {
       if (p.apiId){
