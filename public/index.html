@@ -1149,10 +1149,6 @@ function renderGroup(day, g, gi, container) {
           <input type="time" id="gt-${g.id}" value="${g.time}" />
           <button class="btn-text-group admin-only" style="margin-top:6px;display:${isAdmin()?'':'none'}" onclick="textGroup('${day}','${g.id}')">📱 Text Group</button>
         </div>
-        <div class="form-group">
-          <label>Holes</label>
-          <select id="gh-${g.id}">${HOLES.map(h=>`<option${h===g.holes?' selected':''}>${h}</option>`).join('')}</select>
-        </div>
         <div class="form-group" style="grid-column:1/-1">
           <label>Notes</label>
           <textarea id="gn-${g.id}" placeholder="Any special notes…">${g.notes||''}</textarea>
@@ -1173,11 +1169,6 @@ function renderGroup(day, g, gi, container) {
     const inp = document.getElementById('gt-'+g.id);
     if (!inp || !inp.value) return;
     showTeeConfirm(day, g.id, inp.value, g.time);
-  });
-  document.getElementById('gh-'+g.id).addEventListener('change', () => {
-    g.holes = document.getElementById('gh-'+g.id).value;
-    g._dirty = Date.now();
-    saveTeeTime(g, day);
   });
   document.getElementById('gn-'+g.id).addEventListener('input', () => {
     g.notes = document.getElementById('gn-'+g.id).value;
