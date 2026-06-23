@@ -130,7 +130,7 @@ function normalizeNameForMatch(name) {
     .trim();
 }
 
-app.post('/api/players/import-handicaps', requireAuth, upload.single('file'), async (req, res) => {
+app.post('/api/players/import-handicaps', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   try {
     const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
