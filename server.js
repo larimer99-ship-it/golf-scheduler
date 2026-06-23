@@ -3,6 +3,8 @@
 const express = require('express');
 const cors    = require('cors');
 const crypto  = require('crypto');
+const multer  = require('multer');
+const XLSX    = require('xlsx');
 const { Pool } = require('pg');
 
 const app = express();
@@ -112,6 +114,52 @@ app.delete('/api/players/:id', async (req, res) => {
     const { rowCount } = await pool.query('DELETE FROM players WHERE id = $1', [req.params.id]);
     if (!rowCount) return res.status(404).json({ error: 'Player not found' });
     res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+function normalizeNameForMatch(name) {
+  return String(name)
+    .replace(/^(mr\.?|mrs\.?|ms\.?|dr\.?)\s+/i, '')
+    .replace(/\s+\d+$/, '')
+    .toLowerCase()
+    .replace(/['.]/g, '')
+    .trim();
+}
+
+app.post('/api/players/import-handicaps', requireAuth, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+    const xlsxMap = new Map();
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const name = row[2];
+      const hi   = row[7]; // Current H.I.
+      if (!name || !hi || hi === 'NH') continue;
+      const val = parseFloat(String(hi).replace('+', ''));
+      if (!isNaN(val)) xlsxMap.set(normalizeNameForMatch(name), val);
+    }
+
+    const { rows: players } = await pool.query('SELECT id, name, handicap FROM players');
+    const updates = [];
+    for (const player of players) {
+      const norm = normalizeNameForMatch(player.name);
+      if (!xlsxMap.has(norm)) continue;
+      const newHcp = xlsxMap.get(norm);
+      const oldHcp = player.handicap != null ? parseFloat(player.handicap) : null;
+      if (newHcp === oldHcp) continue;
+      await pool.query('UPDATE players SET handicap = $1 WHERE id = $2', [newHcp, player.id]);
+      updates.push({ name: player.name, old: oldHcp, new: newHcp });
+    }
+
+    res.json({ updated: updates.length, results: updates });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

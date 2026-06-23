@@ -533,6 +533,8 @@
 
 <div id="handicapAdminRow" style="display:none;max-width:min(960px,100%);margin:0 auto clamp(6px,1.5vw,12px);padding:0 var(--pad)">
   <button onclick="showHandicapEditor()" style="background:rgba(82,183,136,0.1);border:1px solid rgba(82,183,136,0.28);border-radius:5px;color:var(--light-green);cursor:pointer;font-family:'Courier Prime',monospace;font-size:0.76rem;letter-spacing:0.06em;padding:6px 14px">✏ Edit All Handicaps</button>
+  <input type="file" id="hdcpFileInput" accept=".xlsx" style="display:none" onchange="handleHdcpFile(this)">
+  <button onclick="document.getElementById('hdcpFileInput').click()" style="background:rgba(82,183,136,0.1);border:1px solid rgba(82,183,136,0.28);border-radius:5px;color:var(--light-green);cursor:pointer;font-family:'Courier Prime',monospace;font-size:0.76rem;letter-spacing:0.06em;padding:6px 14px;margin-left:8px">↑ Import HDCP Report</button>
 </div>
 
 <div class="summary-bar">
@@ -1591,6 +1593,32 @@ async function showHandicapEditor() {
 
 function closeHandicapEditor() {
   document.getElementById('handicapModal').classList.remove('open');
+}
+
+async function handleHdcpFile(input) {
+  const file = input.files[0];
+  input.value = '';
+  if (!file) return;
+  if (file.name.toLowerCase() !== 'currenthandicaps.xlsx') {
+    showToast('⚠ File must be named currenthandicaps.xlsx');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', file);
+  showToast('Importing handicaps…');
+  try {
+    const res = await fetch(`${API}/players/import-handicaps`, {
+      method: 'POST',
+      headers: { 'x-auth-token': getToken() || '' },
+      body: fd
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Import failed');
+    showToast(`✓ Updated ${data.updated} handicap${data.updated !== 1 ? 's' : ''}`);
+  } catch(e) {
+    showToast('⚠ Import failed: ' + e.message);
+    console.error('handleHdcpFile:', e);
+  }
 }
 
 async function saveHandicapInEditor(playerId, value, inputEl) {
