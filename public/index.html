@@ -2310,7 +2310,47 @@ function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, 
     }));
     renderDay(day);
     saveTeamsToDB(day, teams, bestBalls);
+    assignTeamsToTeeTimes(day, teams);
   }
+}
+
+async function assignTeamsToTeeTimes(day, teams) {
+  const groups = (state[day]?.groups||[])
+    .filter(g => g.apiId)
+    .sort((a,b) => (a.time||'').localeCompare(b.time||''));
+  if (!groups.length || !teams.length) return;
+
+  // Build name → { apiId, teeTimeApiId } from current state
+  const playerInfo = {};
+  groups.forEach(g => {
+    (g.players||[]).forEach(p => {
+      if (p.apiId) playerInfo[p.name] = { apiId: p.apiId, teeTimeApiId: g.apiId };
+    });
+  });
+
+  showToast('Grouping players by team…');
+
+  // Remove every player from their current tee time
+  await Promise.all(Object.values(playerInfo).map(({ apiId, teeTimeApiId }) =>
+    apiFetch('DELETE', `/tee-times/${teeTimeApiId}/players`, { player_id: apiId }).catch(e => console.error('remove:', e))
+  ));
+
+  // Assign: each team fills one tee time (spills to next if > 4 players)
+  let gIdx = 0, slotsFilled = 0;
+  for (const team of teams) {
+    for (const player of team.players) {
+      const info = playerInfo[player.name];
+      if (!info) continue;
+      if (slotsFilled >= 4) { gIdx++; slotsFilled = 0; }
+      if (gIdx >= groups.length) break;
+      await apiFetch('POST', `/tee-times/${groups[gIdx].apiId}/players`, { player_id: info.apiId }).catch(e => console.error('add:', e));
+      slotsFilled++;
+    }
+    if (slotsFilled > 0) { gIdx++; slotsFilled = 0; }
+  }
+
+  await syncFromAPI();
+  showToast('✓ Tee times grouped by team');
 }
 
 async function saveTeamsToDB(day, teams, bestBalls) {
