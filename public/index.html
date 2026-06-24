@@ -222,6 +222,15 @@
   .team-total { font-size:clamp(0.6rem,1.3vw,0.68rem); color:var(--light-green); opacity:0.65; margin-top:6px; padding-top:5px; border-top:1px solid rgba(82,183,136,0.15); letter-spacing:0.06em; }
   .teams-method { font-size:clamp(0.58rem,1.2vw,0.65rem); color:var(--light-green); opacity:0.55; padding:0 14px 10px; font-style:italic; }
   .player-team-badge { font-family:'Courier Prime',monospace; font-size:0.57rem; letter-spacing:0.08em; padding:1px 6px; border-radius:3px; border:1px solid; font-weight:700; text-transform:uppercase; white-space:nowrap; align-self:flex-start; margin-top:3px; }
+  .team-tee-group { padding:8px 14px 10px; border-bottom:1px solid rgba(82,183,136,0.1); }
+  .team-tee-group:last-of-type { border-bottom:none; }
+  .team-tee-header { font-family:'Courier Prime',monospace; font-size:clamp(0.6rem,1.3vw,0.68rem); letter-spacing:0.1em; text-transform:uppercase; color:var(--sand); opacity:0.85; margin-bottom:6px; }
+  .team-tee-player { display:flex; align-items:center; gap:8px; padding:3px 0; font-size:clamp(0.7rem,1.6vw,0.8rem); color:var(--cream); }
+  .team-tee-player-name { flex:1; min-width:0; }
+  .team-tee-team-label { font-family:'Courier Prime',monospace; font-size:0.58rem; letter-spacing:0.08em; font-weight:700; text-transform:uppercase; white-space:nowrap; }
+  .teams-legend { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:8px 14px; border-top:1px solid rgba(212,168,83,0.15); }
+  .teams-legend-item { display:flex; align-items:center; gap:5px; font-family:'Courier Prime',monospace; font-size:0.62rem; letter-spacing:0.06em; font-weight:700; }
+  .teams-legend-hcp { opacity:0.55; font-weight:400; margin-left:2px; }
 
   /* Team size picker */
   .team-size-picker { display:flex; flex-direction:column; gap:10px; margin-top:12px; background:rgba(0,0,0,0.18); border:1px solid rgba(212,168,83,0.25); border-radius:6px; padding:14px 16px; animation:slide-down 0.22s ease; }
@@ -2200,27 +2209,64 @@ function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, 
   const isManual = !teamSize;
   const method=isManual?'Manually built teams':randomMode?'Random draw — handicaps not considered':knownHcp===totalPlayers?'Balanced by playing handicap':knownHcp>0?'Balanced by available handicaps (some players missing index/tee)':'Random — add handicap indexes & select tees for handicap-based teams';
   const bbLabel = `${bestBalls} Best Ball${bestBalls>1?'s':''}`;
-  const playerTeeTime = {};
-  (state[day]?.groups||[]).forEach(g => {
-    if (g.time) (g.players||[]).forEach(p => { playerTeeTime[p.name] = formatTime(g.time); });
-  });
-  const teamCardsHtml=teams.map(team=>{
-    const hasAllHcp=team.players.every(p=>p.playingHcp!==null);
-    const teamTotal=team.players.reduce((s,p)=>s+(p.playingHcp!==null?p.playingHcp:0),0);
-    return `<div class="team-card" style="border-left-color:${team.color}">
-      <div class="team-name" style="color:${team.color}">${team.name}</div>
-      ${team.players.map(p=>{
-        const tt=playerTeeTime[p.name]?`<span class="team-player-teetime">${playerTeeTime[p.name]}</span>`:'';
-        return `<div class="team-player">
+  // Build player → team lookup
+  const playerTeamMap = {};
+  teams.forEach(t => t.players.forEach(p => { playerTeamMap[p.name] = t; }));
+
+  // Tee-time grouped view
+  const teeGroups = (state[day]?.groups||[])
+    .filter(g => (g.players||[]).length)
+    .sort((a,b) => (a.time||'').localeCompare(b.time||''));
+
+  let bodyHtml;
+  if (teeGroups.length) {
+    bodyHtml = teeGroups.map((g, gi) => {
+      const timeLabel = g.time ? formatTime(g.time) : 'No time set';
+      const rows = (g.players||[]).map(p => {
+        const t = playerTeamMap[p.name];
+        const dot = t ? `background:${t.color}` : 'background:rgba(82,183,136,0.5)';
+        const teamLabel = t ? `<span class="team-tee-team-label" style="color:${t.color}">${t.name}</span>` : '';
+        const tp = t?.players.find(x => x.name === p.name);
+        const hcpText = tp ? (tp.playingHcp!==null ? `HCP ${tp.playingHcp}` : tp.handicap ? `Idx ${tp.handicap}` : '—') : '—';
+        return `<div class="team-tee-player">
+          <span class="team-player-dot" style="${dot}"></span>
+          <span class="team-tee-player-name">${p.name}</span>
+          ${teamLabel}
+          <span class="team-player-hcp">${hcpText}</span>
+        </div>`;
+      }).join('');
+      return `<div class="team-tee-group">
+        <div class="team-tee-header">Tee Time ${gi+1} · ${timeLabel}</div>
+        ${rows}
+      </div>`;
+    }).join('');
+  } else {
+    // Fallback: no tee times set, show classic team cards
+    bodyHtml = `<div class="teams-grid">${teams.map(team=>{
+      const hasAllHcp=team.players.every(p=>p.playingHcp!==null);
+      const teamTotal=team.players.reduce((s,p)=>s+(p.playingHcp!==null?p.playingHcp:0),0);
+      return `<div class="team-card" style="border-left-color:${team.color}">
+        <div class="team-name" style="color:${team.color}">${team.name}</div>
+        ${team.players.map(p=>`<div class="team-player">
           <span class="team-player-dot" style="${p.teeColor?`background:${p.teeColor}`:'background:rgba(82,183,136,0.5)'}"></span>
           <span class="team-player-name">${p.name}</span>
-          ${tt}
           <span class="team-player-hcp">${p.playingHcp!==null?`HCP ${p.playingHcp}`:p.handicap?`Idx ${p.handicap}`:'—'}</span>
-        </div>`;
-      }).join('')}
-      ${hasAllHcp?`<div class="team-total">Combined HCP: ${teamTotal}</div>`:''}
-    </div>`;
+        </div>`).join('')}
+        ${hasAllHcp?`<div class="team-total">Combined HCP: ${teamTotal}</div>`:''}
+      </div>`;
+    }).join('')}</div>`;
+  }
+
+  // Compact team legend with combined HCP
+  const legendHtml = teams.map(t => {
+    const total = t.players.reduce((s,p) => s + (p.playingHcp!==null ? p.playingHcp : 0), 0);
+    const hasHcp = t.players.some(p => p.playingHcp!==null);
+    return `<span class="teams-legend-item" style="color:${t.color}">
+      <span class="team-player-dot" style="background:${t.color}"></span>
+      ${t.name}${hasHcp?`<span class="teams-legend-hcp">(${total})</span>`:''}
+    </span>`;
   }).join('');
+
   const reshufflebtns = teamSize
     ? `<button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},false,${bestBalls})">↺ HCP</button>
        <button class="btn-reshuffle" onclick="makeTeams('${day}',${teamSize},true,${bestBalls})">🎲 Random</button>`
@@ -2242,7 +2288,8 @@ function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, 
       </div>
     </div>
     ${ninesPrompt}
-    <div class="teams-grid">${teamCardsHtml}</div>
+    ${bodyHtml}
+    <div class="teams-legend">${legendHtml}</div>
     <div class="teams-method">${method}</div>
   </div>`;
   if (!skipSave) {
