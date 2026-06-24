@@ -218,8 +218,10 @@
   .team-player-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
   .team-player-name { flex:1; }
   .team-player-hcp { font-size:clamp(0.6rem,1.3vw,0.7rem); color:var(--pale-green); opacity:0.7; white-space:nowrap; }
+  .team-player-teetime { font-size:clamp(0.58rem,1.2vw,0.65rem); color:var(--sand); opacity:0.7; white-space:nowrap; }
   .team-total { font-size:clamp(0.6rem,1.3vw,0.68rem); color:var(--light-green); opacity:0.65; margin-top:6px; padding-top:5px; border-top:1px solid rgba(82,183,136,0.15); letter-spacing:0.06em; }
   .teams-method { font-size:clamp(0.58rem,1.2vw,0.65rem); color:var(--light-green); opacity:0.55; padding:0 14px 10px; font-style:italic; }
+  .player-team-badge { font-family:'Courier Prime',monospace; font-size:0.57rem; letter-spacing:0.08em; padding:1px 6px; border-radius:3px; border:1px solid; font-weight:700; text-transform:uppercase; white-space:nowrap; align-self:flex-start; margin-top:3px; }
 
   /* Team size picker */
   .team-size-picker { display:flex; flex-direction:column; gap:10px; margin-top:12px; background:rgba(0,0,0,0.18); border:1px solid rgba(212,168,83,0.25); border-radius:6px; padding:14px 16px; animation:slide-down 0.22s ease; }
@@ -836,6 +838,7 @@ function openDateCard(dateStr, hideOthers=true) {
     card.style.display='';
   }
   renderDay(dateStr);
+  loadTeamsForDay(dateStr);
   updateCardBadge(dateStr);
   if (hideOthers) setTimeout(()=>card.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
 }
@@ -1224,6 +1227,8 @@ function renderGroupChips(day, g) {
     const tc  = tee ? tee.color : null;
     if (tc) chip.style.cssText = `border-color:${tc}55;box-shadow:inset 3px 0 0 ${tc};background:color-mix(in srgb,${tc} 8%,rgba(45,106,79,0.4))`;
     const nameStyle = tc ? `color:color-mix(in srgb,${tc} 60%,var(--pale-green))` : '';
+    const playerTeam = getPlayerTeam(day, p.name);
+    const teamBadge = playerTeam ? `<span class="player-team-badge" style="color:${playerTeam.color};border-color:${playerTeam.color}66;background:${playerTeam.color}15">${playerTeam.name}</span>` : '';
     const teeBtns = teeState.tees.length===0
       ? '<span class="tee-no-data">No tees configured above ↑</span>'
       : teeState.tees.map(t=>`
@@ -1249,6 +1254,7 @@ function renderGroupChips(day, g) {
         <div class="player-name-stack">
           <span class="player-firstname" style="${nameStyle}">${firstName.replace(/</g,'&lt;')}</span>
           ${lastName ? `<span class="player-lastname" style="${nameStyle}">${lastName.replace(/</g,'&lt;')}</span>` : ''}
+          ${teamBadge}
         </div>
         <div class="transport-toggle">
           <button class="${p.transport==='walk'?'active-walk':''}" onclick="setTransport('${day}','${g.id}',${i},'walk')">🚶 Walk</button>
@@ -2188,22 +2194,30 @@ function buildRandomTeams(players,teamSize){
   s.forEach((p,i)=>teams[i%n].players.push(p));return teams;
 }
 
-function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, bestBalls) {
+function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, bestBalls, skipSave=false) {
   bestBalls = bestBalls || 1;
   const knownHcp=teams.flatMap(t=>t.players).filter(p=>p.playingHcp!==null).length;
   const isManual = !teamSize;
   const method=isManual?'Manually built teams':randomMode?'Random draw — handicaps not considered':knownHcp===totalPlayers?'Balanced by playing handicap':knownHcp>0?'Balanced by available handicaps (some players missing index/tee)':'Random — add handicap indexes & select tees for handicap-based teams';
   const bbLabel = `${bestBalls} Best Ball${bestBalls>1?'s':''}`;
+  const playerTeeTime = {};
+  (state[day]?.groups||[]).forEach(g => {
+    if (g.time) (g.players||[]).forEach(p => { playerTeeTime[p.name] = formatTime(g.time); });
+  });
   const teamCardsHtml=teams.map(team=>{
     const hasAllHcp=team.players.every(p=>p.playingHcp!==null);
     const teamTotal=team.players.reduce((s,p)=>s+(p.playingHcp!==null?p.playingHcp:0),0);
     return `<div class="team-card" style="border-left-color:${team.color}">
       <div class="team-name" style="color:${team.color}">${team.name}</div>
-      ${team.players.map(p=>`<div class="team-player">
-        <span class="team-player-dot" style="${p.teeColor?`background:${p.teeColor}`:'background:rgba(82,183,136,0.5)'}"></span>
-        <span class="team-player-name">${p.name}</span>
-        <span class="team-player-hcp">${p.playingHcp!==null?`HCP ${p.playingHcp}`:p.handicap?`Idx ${p.handicap}`:'—'}</span>
-      </div>`).join('')}
+      ${team.players.map(p=>{
+        const tt=playerTeeTime[p.name]?`<span class="team-player-teetime">${playerTeeTime[p.name]}</span>`:'';
+        return `<div class="team-player">
+          <span class="team-player-dot" style="${p.teeColor?`background:${p.teeColor}`:'background:rgba(82,183,136,0.5)'}"></span>
+          <span class="team-player-name">${p.name}</span>
+          ${tt}
+          <span class="team-player-hcp">${p.playingHcp!==null?`HCP ${p.playingHcp}`:p.handicap?`Idx ${p.handicap}`:'—'}</span>
+        </div>`;
+      }).join('')}
       ${hasAllHcp?`<div class="team-total">Combined HCP: ${teamTotal}</div>`:''}
     </div>`;
   }).join('');
@@ -2231,7 +2245,14 @@ function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, 
     <div class="teams-grid">${teamCardsHtml}</div>
     <div class="teams-method">${method}</div>
   </div>`;
-  saveTeamsToDB(day, teams, bestBalls);
+  if (!skipSave) {
+    savedTeams[day] = teams.map(t => ({
+      name: t.name, color: t.color, best_balls: bestBalls,
+      players: t.players.map(p => ({ name: p.name, handicap: p.handicap??null, playingHcp: p.playingHcp??null })),
+    }));
+    renderDay(day);
+    saveTeamsToDB(day, teams, bestBalls);
+  }
 }
 
 async function saveTeamsToDB(day, teams, bestBalls) {
@@ -2255,6 +2276,43 @@ async function saveTeamsToDB(day, teams, bestBalls) {
 const savedTeams      = {}; // { [day]: [{id, name, color, players:[{name,handicap,playingHcp}]}] }
 const playerScoreData = {}; // { [teamId]: { [playerName]: { [hole]: score } } }
 const globalHoleSI    = {}; // { [hole]: strokeIndex } — global, set once, used for all dates
+
+function getPlayerTeam(day, playerName) {
+  const teams = savedTeams[day];
+  if (!teams) return null;
+  for (const t of teams) {
+    if ((t.players||[]).some(p => p.name === playerName)) return t;
+  }
+  return null;
+}
+
+async function loadTeamsForDay(day) {
+  if (savedTeams[day]) { showSavedTeams(day); return; }
+  try {
+    const rows = await apiFetch('GET', `/teams?date=${day}`);
+    if (!rows.length) return;
+    savedTeams[day] = rows;
+    showSavedTeams(day);
+    renderDay(day);
+  } catch(e) { console.error('loadTeamsForDay:', e); }
+}
+
+function showSavedTeams(day) {
+  const container = document.getElementById('teams-'+day);
+  if (!container || container.querySelector('.teams-panel')) return;
+  const rows = savedTeams[day];
+  if (!rows || !rows.length) return;
+  const bb = rows[0].best_balls || 1;
+  const teams = rows.map(r => ({
+    name: r.name, color: r.color,
+    players: (r.players||[]).map(p => ({
+      name: p.name, handicap: p.handicap??null, playingHcp: p.playingHcp??null,
+      teeColor: null, sortHcp: 999,
+    })),
+  }));
+  const total = teams.reduce((s,t) => s + t.players.length, 0);
+  renderTeams(day, teams, container, total, 0, false, bb, true);
+}
 const globalHolePar   = {}; // { [hole]: par }        — global, set once, used for all dates
 let _scorecardDay      = null;
 let _scorecardInterval = null;
