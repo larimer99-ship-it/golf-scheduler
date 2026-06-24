@@ -2224,49 +2224,20 @@ function renderTeams(day, teams, container, totalPlayers, teamSize, randomMode, 
   const playerTeamMap = {};
   teams.forEach(t => t.players.forEach(p => { playerTeamMap[p.name] = t; }));
 
-  // Tee-time grouped view
-  const teeGroups = (state[day]?.groups||[])
-    .filter(g => (g.players||[]).length)
-    .sort((a,b) => (a.time||'').localeCompare(b.time||''));
-
-  let bodyHtml;
-  if (teeGroups.length) {
-    bodyHtml = teeGroups.map((g, gi) => {
-      const timeLabel = g.time ? formatTime(g.time) : 'No time set';
-      const rows = (g.players||[]).map(p => {
-        const t = playerTeamMap[p.name];
-        const dot = t ? `background:${t.color}` : 'background:rgba(82,183,136,0.5)';
-        const teamLabel = t ? `<span class="team-tee-team-label" style="color:${t.color}">${t.name}</span>` : '';
-        const tp = t?.players.find(x => x.name === p.name);
-        const hcpText = tp ? (tp.playingHcp!==null ? `HCP ${tp.playingHcp}` : tp.handicap ? `Idx ${tp.handicap}` : '—') : '—';
-        return `<div class="team-tee-player">
-          <span class="team-player-dot" style="${dot}"></span>
-          <span class="team-tee-player-name">${p.name}</span>
-          ${teamLabel}
-          <span class="team-player-hcp">${hcpText}</span>
-        </div>`;
-      }).join('');
-      return `<div class="team-tee-group">
-        <div class="team-tee-header">Tee Time ${gi+1} · ${timeLabel}</div>
-        ${rows}
-      </div>`;
-    }).join('');
-  } else {
-    // Fallback: no tee times set, show classic team cards
-    bodyHtml = `<div class="teams-grid">${teams.map(team=>{
-      const hasAllHcp=team.players.every(p=>p.playingHcp!==null);
-      const teamTotal=team.players.reduce((s,p)=>s+(p.playingHcp!==null?p.playingHcp:0),0);
-      return `<div class="team-card" style="border-left-color:${team.color}">
-        <div class="team-name" style="color:${team.color}">${team.name}</div>
-        ${team.players.map(p=>`<div class="team-player">
-          <span class="team-player-dot" style="${p.teeColor?`background:${p.teeColor}`:'background:rgba(82,183,136,0.5)'}"></span>
-          <span class="team-player-name">${p.name}</span>
-          <span class="team-player-hcp">${p.playingHcp!==null?`HCP ${p.playingHcp}`:p.handicap?`Idx ${p.handicap}`:'—'}</span>
-        </div>`).join('')}
-        ${hasAllHcp?`<div class="team-total">Combined HCP: ${teamTotal}</div>`:''}
-      </div>`;
-    }).join('')}</div>`;
-  }
+  // Team cards — one card per team, in order (matches tee time order after assignment)
+  const bodyHtml = `<div class="teams-grid">${teams.map(team=>{
+    const hasAllHcp=team.players.every(p=>p.playingHcp!==null);
+    const teamTotal=team.players.reduce((s,p)=>s+(p.playingHcp!==null?p.playingHcp:0),0);
+    return `<div class="team-card" style="border-left-color:${team.color}">
+      <div class="team-name" style="color:${team.color}">${team.name}</div>
+      ${team.players.map(p=>`<div class="team-player">
+        <span class="team-player-dot" style="${p.teeColor?`background:${p.teeColor}`:'background:rgba(82,183,136,0.5)'}"></span>
+        <span class="team-player-name">${p.name}</span>
+        <span class="team-player-hcp">${p.playingHcp!==null?`HCP ${p.playingHcp}`:p.handicap?`Idx ${p.handicap}`:'—'}</span>
+      </div>`).join('')}
+      ${hasAllHcp?`<div class="team-total">Combined HCP: ${teamTotal}</div>`:''}
+    </div>`;
+  }).join('')}</div>`;
 
   // Compact team legend with combined HCP
   const legendHtml = teams.map(t => {
@@ -2350,7 +2321,26 @@ async function assignTeamsToTeeTimes(day, teams) {
   }
 
   await syncFromAPI();
+  refreshTeamsPanel(day);
   showToast('✓ Tee times grouped by team');
+}
+
+function refreshTeamsPanel(day) {
+  const container = document.getElementById('teams-'+day);
+  if (!container) return;
+  const rows = savedTeams[day];
+  if (!rows?.length) return;
+  const bb = rows[0].best_balls || 1;
+  const teams = rows.map(r => ({
+    name: r.name, color: r.color,
+    players: (r.players||[]).map(p => ({
+      name: p.name, handicap: p.handicap??null, playingHcp: p.playingHcp??null,
+      teeColor: null, sortHcp: 999,
+    })),
+  }));
+  const total = teams.reduce((s,t) => s + t.players.length, 0);
+  container.innerHTML = '';
+  renderTeams(day, teams, container, total, 0, false, bb, true);
 }
 
 async function saveTeamsToDB(day, teams, bestBalls) {
