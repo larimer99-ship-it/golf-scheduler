@@ -495,6 +495,8 @@
   .sc-9s-badge.sc-9s-3 { background:rgba(245,240,232,0.1); }
   .sc-9s-badge.sc-9s-2 { background:rgba(245,240,232,0.05); }
   .sc-9s-badge.sc-9s-1 { background:rgba(231,76,60,0.15); }
+  .nines-pts-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:8px 14px 10px; background:rgba(240,197,32,0.06); border-top:1px solid rgba(240,197,32,0.2); margin-top:4px; }
+  .nines-player-running { font-family:'Courier Prime',monospace; font-size:0.6rem; letter-spacing:0.06em; color:var(--sand); opacity:0.75; }
 </style>
 </head>
 <body>
@@ -2424,7 +2426,7 @@ function strokesOnHole(playingHcp, si) {
 }
 
 async function openNinesGame(day) {
-  _viewMode = '9s';
+  _viewMode = '9s-entry';
   const el = document.getElementById('scorecard-'+day);
   if (!el) return;
   if (el.style.display !== 'none') { renderScorecard(day); el.scrollIntoView({behavior:'smooth',block:'nearest'}); return; }
@@ -2494,8 +2496,9 @@ function renderScorecard(day) {
     return;
   }
 
-  if (_viewMode === 'entry') { renderHoleEntry(day, teams, el); return; }
-  if (_viewMode === '9s')    { renderNinesGame(day, teams, el); return; }
+  if (_viewMode === 'entry')    { renderHoleEntry(day, teams, el); return; }
+  if (_viewMode === '9s')       { renderNinesGame(day, teams, el); return; }
+  if (_viewMode === '9s-entry') { renderNinesEntry(day, teams, el); return; }
 
   const holeNums = Array.from({length:18}, (_,i) => i+1);
   const si       = globalHoleSI;
@@ -2839,13 +2842,12 @@ function scoreButtonClick(teamId, playerName, hole, score, day) {
   if (!playerScoreData[teamId][playerName]) playerScoreData[teamId][playerName] = {};
   playerScoreData[teamId][playerName][hole] = newScore;
   const d = day || _scorecardDay;
-  if (_viewMode === 'entry') {
-    const entryEl = document.getElementById('scorecard-'+d);
-    if (entryEl) renderHoleEntry(d, savedTeams[d] || [], entryEl);
-  }
+  const entryEl = document.getElementById('scorecard-'+d);
+  if (_viewMode === 'entry' && entryEl) renderHoleEntry(d, savedTeams[d] || [], entryEl);
+  if (_viewMode === '9s-entry' && entryEl) renderNinesEntry(d, savedTeams[d] || [], entryEl);
   savePlayerScore(teamId, playerName, hole, newScore != null ? String(newScore) : '');
   // Auto-advance when all players have scored this hole
-  if (newScore != null && hole < 18 && _viewMode === 'entry' && allScoredOnHole(d, hole)) {
+  if (newScore != null && hole < 18 && (_viewMode === 'entry' || _viewMode === '9s-entry') && allScoredOnHole(d, hole)) {
     clearTimeout(_autoAdvanceTimer);
     _autoAdvanceTimer = setTimeout(() => {
       if (_currentHole === hole) setCurrentHole(hole + 1, d);
@@ -2909,6 +2911,107 @@ function computeNinePoints(nets) {
   if (lo === mid)               return nets.map(n => n === lo ? 4 : 1); // two tied low → 4-4-1
   if (mid === hi)               return nets.map(n => n === lo ? 5 : 2); // one low, two tie → 5-2-2
   return nets.map(n => n === lo ? 5 : n === hi ? 1 : 3);           // all different → 5-3-1
+}
+
+function renderNinesEntry(day, teams, el) {
+  const h   = _currentHole;
+  const par = globalHolePar[h] || '-';
+  const si  = globalHoleSI[h]  || '-';
+
+  const pips = Array.from({length:18}, (_,i) => {
+    const n = i + 1;
+    const cls = n === h ? 'hole-pip cur' : (allScoredOnHole(day, n) ? 'hole-pip scored' : 'hole-pip');
+    return `<div class="${cls}" title="Hole ${n}" onclick="setCurrentHole(${n},'${day}')"></div>`;
+  }).join('');
+
+  const threeTeams = teams.filter(t => Array.isArray(t.players) && t.players.length === 3);
+
+  const teamSections = threeTeams.map(team => {
+    const tc      = team.color || 'var(--light-green)';
+    const players = team.players;
+    const pNames  = players.map(p => typeof p === 'string' ? p : p.name);
+    const pHcps   = players.map(p => typeof p === 'object' ? p.playingHcp : null);
+
+    // Net scores on current hole
+    const nets = pNames.map((nm, i) => {
+      const gross = (playerScoreData[team.id]||{})[nm]?.[h];
+      return gross != null ? gross - strokesOnHole(pHcps[i], globalHoleSI[h]) : null;
+    });
+    const allScored = nets.every(n => n !== null);
+    const holePts   = allScored ? computeNinePoints(nets) : null;
+
+    // Running point totals (all holes except current)
+    const runningPts = pNames.map((nm, pi) => {
+      let tot = 0;
+      for (let hh = 1; hh <= 18; hh++) {
+        if (hh === h) continue;
+        const n2 = pNames.map((n, i2) => {
+          const g = (playerScoreData[team.id]||{})[n]?.[hh];
+          return g != null ? g - strokesOnHole(pHcps[i2], globalHoleSI[hh]) : null;
+        });
+        if (n2.every(x => x !== null)) tot += computeNinePoints(n2)[pi];
+      }
+      return tot;
+    });
+
+    const playerEntries = pNames.map((pName, pi) => {
+      const phcp    = pHcps[pi];
+      const current = (playerScoreData[team.id]||{})[pName]?.[h];
+      const hcpLbl  = phcp != null ? ` (${phcp})` : '';
+      const strokes = strokesOnHole(phcp, globalHoleSI[h]);
+      const dots    = strokes > 0 ? `<span class="stroke-dot">${'●'.repeat(Math.min(strokes,2))}</span>` : '';
+      const safe    = pName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      const btns    = Array.from({length:9}, (_,i) => {
+        const v = i + 1;
+        return `<button class="sc-score-btn${current===v?' sel':''}" onclick="scoreButtonClick('${team.id}','${safe}',${h},${v},'${day}')">${v}</button>`;
+      }).join('');
+      const pts      = holePts ? holePts[pi] : null;
+      const ptsBadge = pts != null ? `<span class="sc-9s-badge sc-9s-${pts}">${pts} pt${pts!==1?'s':''}</span>` : '';
+      return `<div class="hole-player-wrap">
+        <div class="hole-player-entry${strokes>0?' stroke-hole':''}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+            <span class="hole-player-name">${pName}${hcpLbl}${dots}</span>
+            <span class="nines-player-running">${runningPts[pi]} pts</span>
+            ${ptsBadge}
+          </div>
+          <div class="score-btns">${btns}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    const ptsBar = holePts ? `<div class="nines-pts-bar">
+      ${pNames.map((nm,i) => `<span class="sc-9s-badge sc-9s-${holePts[i]}">${nm.split(' ')[0]}: ${holePts[i]} pt${holePts[i]!==1?'s':''}</span>`).join('')}
+    </div>` : '';
+
+    return `<div class="hole-teams-entry" style="border-top:1px solid ${tc}44">
+      <div class="hole-team-hdr" style="color:${tc}">${team.name}</div>
+      ${playerEntries}
+      ${ptsBar}
+    </div>`;
+  }).join('') || '<div style="padding:14px;opacity:.55;font-style:italic">No 3-player team found.</div>';
+
+  el.innerHTML = `<div class="scorecard-panel">
+    <div class="scorecard-header">
+      <span class="scorecard-title">⛳ 9s Game</span>
+      <span class="live-dot">● LIVE</span>
+      <button class="btn-close-sc" onclick="closeScorecard('${day}')">✕</button>
+    </div>
+    <div class="view-toggle">
+      <button class="view-tab on">Enter Scores</button>
+      <button class="view-tab" onclick="setViewMode('9s','${day}')">9s Scorecard</button>
+      <button class="view-tab" onclick="setViewMode('table','${day}')">Full Card</button>
+    </div>
+    <div class="hole-nav">
+      <button class="hole-nav-btn" onclick="setCurrentHole(${h-1},'${day}')"${h<=1?' disabled':''}>← Prev</button>
+      <div class="hole-info-center">
+        <div class="hole-num-big">Hole ${h}</div>
+        <div class="hole-meta-line">PAR ${par} · HCP ${si}</div>
+      </div>
+      <button class="hole-nav-btn" onclick="setCurrentHole(${h+1},'${day}')"${h>=18?' disabled':''}>Next →</button>
+    </div>
+    <div class="hole-pips">${pips}</div>
+    ${teamSections}
+  </div>`;
 }
 
 function renderNinesGame(day, teams, el) {
@@ -3013,9 +3116,9 @@ function renderNinesGame(day, teams, el) {
       <button class="btn-close-sc" onclick="closeScorecard('${day}')">✕</button>
     </div>
     <div class="view-toggle">
-      <button class="view-tab" onclick="setViewMode('entry','${day}')">Hole Entry</button>
+      <button class="view-tab" onclick="setViewMode('9s-entry','${day}')">Enter Scores</button>
+      <button class="view-tab on" onclick="setViewMode('9s','${day}')">9s Scorecard</button>
       <button class="view-tab" onclick="setViewMode('table','${day}')">Full Card</button>
-      <button class="view-tab on" onclick="setViewMode('9s','${day}')">9s Game</button>
     </div>
     <div class="scorecard-scroll">
       <table class="scorecard-table">
