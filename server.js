@@ -24,7 +24,7 @@ app.use(express.json());
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 const ADMIN_USER = 'admin';
-const ADMIN_HASH = '192552f284a3ac57b509b82ec5759158e368dffbf95938ef0d1eaf76969d5120'; // SHA256 of password
+const ADMIN_HASH = 'df17d26fd55804dcf7b266099819acce9934a576e28ca5f0f1947f625544a86f'; // SHA256 of password
 const sessions   = new Set(); // active tokens
 
 function requireAuth(req, res, next) {
