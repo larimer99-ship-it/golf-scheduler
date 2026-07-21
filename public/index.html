@@ -498,13 +498,18 @@
   .nines-pts-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:8px 14px 10px; background:rgba(240,197,32,0.06); border-top:1px solid rgba(240,197,32,0.2); margin-top:4px; }
   .nines-player-running { font-family:'Courier Prime',monospace; font-size:0.6rem; letter-spacing:0.06em; color:var(--sand); opacity:0.75; }
 
-  /* Gnat Forecast */
-  .gnat-banner { display:flex; align-items:center; gap:6px; width:100%; padding:5px 0 2px; margin-top:5px; border-top:1px solid rgba(82,183,136,0.12); font-size:clamp(0.6rem,1.3vw,0.7rem); letter-spacing:0.05em; flex-wrap:wrap; }
-  .gnat-label { text-transform:uppercase; letter-spacing:0.1em; color:var(--light-green); opacity:0.75; }
-  .gnat-num { font-family:'Playfair Display',serif; font-weight:700; font-size:clamp(0.85rem,2vw,1rem); }
-  .gnat-denom { font-weight:400; opacity:0.55; font-size:0.75em; }
-  .gnat-icons { letter-spacing:0; font-size:0.78rem; }
-  .gnat-temp { color:var(--sand); opacity:0.65; margin-left:auto; }
+  /* Tee Forecast (weather + gnats) */
+  .tee-forecast-wrap { width:100%; border-top:1px solid rgba(82,183,136,0.15); margin-top:6px; padding-top:7px; display:flex; flex-direction:column; gap:6px; }
+  .tee-wx { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:clamp(0.72rem,1.6vw,0.82rem); color:var(--pale-green); }
+  .tee-wx-icon { font-size:1.4em; line-height:1; }
+  .tee-wx-temp { font-family:'Playfair Display',serif; font-weight:900; font-size:clamp(1.1rem,2.8vw,1.35rem); color:var(--cream); letter-spacing:-0.01em; }
+  .tee-wx-condition { color:var(--light-green); opacity:0.85; }
+  .tee-wx-detail { color:var(--light-green); opacity:0.6; }
+  .gnat-banner { display:flex; align-items:center; gap:8px; font-size:clamp(0.82rem,1.9vw,0.95rem); letter-spacing:0.04em; flex-wrap:wrap; }
+  .gnat-label { text-transform:uppercase; letter-spacing:0.1em; color:var(--light-green); opacity:0.75; font-size:0.9em; }
+  .gnat-num { font-family:'Playfair Display',serif; font-weight:700; font-size:clamp(1.1rem,2.8vw,1.35rem); }
+  .gnat-denom { font-weight:400; opacity:0.55; font-size:0.65em; }
+  .gnat-icons { letter-spacing:1px; font-size:1em; }
   .gnat-level-0 .gnat-num { color:var(--light-green); }
   .gnat-level-low .gnat-num { color:#52b788; }
   .gnat-level-med .gnat-num { color:var(--sand); }
@@ -688,25 +693,44 @@ const API   = '/api';
 let _uidN = 0;
 function uid() { return 'u' + Date.now() + '_' + (++_uidN); }
 
-// ── Gnat Forecast (Rocky Mount, NC) ──────────────────────
+// ── Area Forecast + Gnat Index (Rocky Mount, NC) ─────────
 const GNAT_LAT = 35.9382, GNAT_LON = -77.7905;
-const gnatCache = {};
+const forecastCache = {}; // key 'YYYY-MM-DD-H' → { tempF, weatherCode, windMph, humidity }
 let _gnatFetch = null;
 
 async function ensureGnatData() {
   if (_gnatFetch) return _gnatFetch;
   _gnatFetch = fetch(
     `https://api.open-meteo.com/v1/forecast?latitude=${GNAT_LAT}&longitude=${GNAT_LON}` +
-    `&hourly=temperature_2m&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=16`
+    `&hourly=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m` +
+    `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=16`
   ).then(r => r.ok ? r.json() : Promise.reject(r.status))
    .then(data => {
      data.hourly.time.forEach((t, i) => {
        const [d, hhmm] = t.split('T');
-       gnatCache[`${d}-${parseInt(hhmm)}`] = data.hourly.temperature_2m[i];
+       forecastCache[`${d}-${parseInt(hhmm)}`] = {
+         tempF:       data.hourly.temperature_2m[i],
+         weatherCode: data.hourly.weather_code[i],
+         windMph:     data.hourly.wind_speed_10m[i],
+         humidity:    data.hourly.relative_humidity_2m[i],
+       };
      });
    })
-   .catch(e => { console.error('gnat weather:', e); _gnatFetch = null; });
+   .catch(e => { console.error('forecast fetch:', e); _gnatFetch = null; });
   return _gnatFetch;
+}
+
+function wmoToCondition(code) {
+  if (code === 0)             return { icon:'☀️',  label:'Clear' };
+  if (code <= 2)              return { icon:'⛅',  label:'Partly Cloudy' };
+  if (code === 3)             return { icon:'☁️',  label:'Overcast' };
+  if (code <= 48)             return { icon:'🌫️', label:'Foggy' };
+  if (code <= 55)             return { icon:'🌦️', label:'Drizzle' };
+  if (code <= 65)             return { icon:'🌧️', label:'Rain' };
+  if (code <= 75)             return { icon:'❄️',  label:'Snow' };
+  if (code <= 82)             return { icon:'🌦️', label:'Showers' };
+  if (code <= 95)             return { icon:'⛈️', label:'Thunderstorm' };
+  return                             { icon:'⛈️', label:'Severe Storm' };
 }
 
 function gnatsFromTemp(f) {
@@ -716,22 +740,36 @@ function gnatsFromTemp(f) {
 
 async function fetchAndShowGnat(day, g) {
   if (!g.time) return;
-  const el = document.getElementById('gnat-' + g.id);
-  if (!el) return;
+  const wrapEl = document.getElementById('forecast-wrap-' + g.id);
+  const wxEl   = document.getElementById('wx-' + g.id);
+  const gnatEl = document.getElementById('gnat-' + g.id);
+  if (!wrapEl || !wxEl || !gnatEl) return;
   const hour = parseInt(g.time.split(':')[0]);
   const key = `${day}-${hour}`;
-  if (gnatCache[key] === undefined) await ensureGnatData();
-  const tempF = gnatCache[key];
-  if (tempF === undefined) { el.style.display = 'none'; return; }
-  const gnats = gnatsFromTemp(tempF);
-  const lvl = gnats === 0 ? 'level-0' : gnats <= 3 ? 'level-low' : gnats <= 6 ? 'level-med' : 'level-high';
+  if (!forecastCache[key]) await ensureGnatData();
+  const fc = forecastCache[key];
+  if (!fc) { wrapEl.style.display = 'none'; return; }
+
+  // Weather row
+  const cond = wmoToCondition(fc.weatherCode);
+  wxEl.innerHTML =
+    `<span class="tee-wx-icon">${cond.icon}</span>` +
+    `<span class="tee-wx-temp">${Math.round(fc.tempF)}°F</span>` +
+    `<span class="tee-wx-condition">${cond.label}</span>` +
+    `<span class="tee-wx-detail">· ${Math.round(fc.windMph)} mph</span>` +
+    `<span class="tee-wx-detail">· ${fc.humidity}% humidity</span>`;
+
+  // Gnat row
+  const gnats = gnatsFromTemp(fc.tempF);
+  const lvl   = gnats === 0 ? 'level-0' : gnats <= 3 ? 'level-low' : gnats <= 6 ? 'level-med' : 'level-high';
   const icons = gnats > 0 ? '🦟'.repeat(Math.min(gnats, 5)) + (gnats > 5 ? `<span style="opacity:.7">+${gnats-5}</span>` : '') : '🌿';
   const label = gnats === 0 ? 'Low gnat activity' : 'Gnat Forecast';
-  el.className = `gnat-banner gnat-${lvl}`;
-  el.innerHTML = gnats > 0
-    ? `<span class="gnat-num">${gnats}<span class="gnat-denom">/10</span></span><span class="gnat-icons">${icons}</span><span class="gnat-label">${label}</span><span class="gnat-temp">${Math.round(tempF)}°F</span>`
-    : `<span class="gnat-icons">${icons}</span><span class="gnat-label">${label}</span><span class="gnat-temp">${Math.round(tempF)}°F</span>`;
-  el.style.display = '';
+  gnatEl.className = `gnat-banner gnat-${lvl}`;
+  gnatEl.innerHTML = gnats > 0
+    ? `<span class="gnat-num">${gnats}<span class="gnat-denom">/10</span></span><span class="gnat-icons">${icons}</span><span class="gnat-label">${label}</span>`
+    : `<span class="gnat-icons">${icons}</span><span class="gnat-label">${label}</span>`;
+
+  wrapEl.style.display = '';
   updateDayGnatBanner(day);
 }
 
@@ -740,13 +778,13 @@ function updateDayGnatBanner(dateStr) {
   if (!el) return;
   const groups = (state[dateStr] && state[dateStr].groups || []).filter(g => g.time);
   if (!groups.length) { el.style.display = 'none'; return; }
-  let maxGnats = -1, repTemp = null;
+  let maxGnats = -1;
   groups.forEach(g => {
     const hour = parseInt(g.time.split(':')[0]);
-    const tempF = gnatCache[`${dateStr}-${hour}`];
-    if (tempF !== undefined) {
-      const gnats = gnatsFromTemp(tempF);
-      if (gnats > maxGnats) { maxGnats = gnats; repTemp = tempF; }
+    const fc = forecastCache[`${dateStr}-${hour}`];
+    if (fc) {
+      const gnats = gnatsFromTemp(fc.tempF);
+      if (gnats > maxGnats) maxGnats = gnats;
     }
   });
   if (maxGnats === -1) { el.style.display = 'none'; return; }
@@ -1256,7 +1294,10 @@ function renderGroup(day, g, gi, container) {
       <span class="tee-group-time-display" id="gtd-${g.id}">${g.time ? formatTime(g.time) : 'No time set'}</span>
       <span class="tee-group-players-count" id="gpc-${g.id}" style="${pCount>=4?'color:#f0c520':''}">${pCount}/4 players</span>
       <button class="btn-remove-group admin-only" style="display:${isAdmin()?'':'none'}" onclick="removeGroup('${day}','${g.id}')">✕ Remove</button>
-      <div class="gnat-banner" id="gnat-${g.id}" style="display:none"></div>
+      <div class="tee-forecast-wrap" id="forecast-wrap-${g.id}" style="display:none">
+        <div class="tee-wx" id="wx-${g.id}"></div>
+        <div class="gnat-banner" id="gnat-${g.id}"></div>
+      </div>
     </div>
     <div class="tee-group-body">
       <div class="tee-group-fields">
