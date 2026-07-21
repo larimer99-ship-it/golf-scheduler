@@ -497,6 +497,18 @@
   .sc-9s-badge.sc-9s-1 { background:rgba(231,76,60,0.15); }
   .nines-pts-bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:8px 14px 10px; background:rgba(240,197,32,0.06); border-top:1px solid rgba(240,197,32,0.2); margin-top:4px; }
   .nines-player-running { font-family:'Courier Prime',monospace; font-size:0.6rem; letter-spacing:0.06em; color:var(--sand); opacity:0.75; }
+
+  /* Gnat Forecast */
+  .gnat-banner { display:flex; align-items:center; gap:6px; width:100%; padding:5px 0 2px; margin-top:5px; border-top:1px solid rgba(82,183,136,0.12); font-size:clamp(0.6rem,1.3vw,0.7rem); letter-spacing:0.05em; flex-wrap:wrap; }
+  .gnat-label { text-transform:uppercase; letter-spacing:0.1em; color:var(--light-green); opacity:0.75; }
+  .gnat-num { font-family:'Playfair Display',serif; font-weight:700; font-size:clamp(0.85rem,2vw,1rem); }
+  .gnat-denom { font-weight:400; opacity:0.55; font-size:0.75em; }
+  .gnat-icons { letter-spacing:0; font-size:0.78rem; }
+  .gnat-temp { color:var(--sand); opacity:0.65; margin-left:auto; }
+  .gnat-level-0 .gnat-num { color:var(--light-green); }
+  .gnat-level-low .gnat-num { color:#52b788; }
+  .gnat-level-med .gnat-num { color:var(--sand); }
+  .gnat-level-high .gnat-num { color:#e07070; }
 </style>
 </head>
 <body>
@@ -670,6 +682,52 @@ const API   = '/api';
 
 let _uidN = 0;
 function uid() { return 'u' + Date.now() + '_' + (++_uidN); }
+
+// ── Gnat Forecast (Rocky Mount, NC) ──────────────────────
+const GNAT_LAT = 35.9382, GNAT_LON = -77.7905;
+const gnatCache = {};
+let _gnatFetch = null;
+
+async function ensureGnatData() {
+  if (_gnatFetch) return _gnatFetch;
+  _gnatFetch = fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${GNAT_LAT}&longitude=${GNAT_LON}` +
+    `&hourly=temperature_2m&temperature_unit=fahrenheit&timezone=America%2FNew_York&forecast_days=16`
+  ).then(r => r.ok ? r.json() : Promise.reject(r.status))
+   .then(data => {
+     data.hourly.time.forEach((t, i) => {
+       const [d, hhmm] = t.split('T');
+       gnatCache[`${d}-${parseInt(hhmm)}`] = data.hourly.temperature_2m[i];
+     });
+   })
+   .catch(e => { console.error('gnat weather:', e); _gnatFetch = null; });
+  return _gnatFetch;
+}
+
+function gnatsFromTemp(f) {
+  if (f < 80) return 0;
+  return Math.min(10, Math.floor((f - 78) / 2));
+}
+
+async function fetchAndShowGnat(day, g) {
+  if (!g.time) return;
+  const el = document.getElementById('gnat-' + g.id);
+  if (!el) return;
+  const hour = parseInt(g.time.split(':')[0]);
+  const key = `${day}-${hour}`;
+  if (gnatCache[key] === undefined) await ensureGnatData();
+  const tempF = gnatCache[key];
+  if (tempF === undefined) { el.style.display = 'none'; return; }
+  const gnats = gnatsFromTemp(tempF);
+  const lvl = gnats === 0 ? 'level-0' : gnats <= 3 ? 'level-low' : gnats <= 6 ? 'level-med' : 'level-high';
+  const icons = gnats > 0 ? '🦟'.repeat(Math.min(gnats, 5)) + (gnats > 5 ? `<span style="opacity:.7">+${gnats-5}</span>` : '') : '🌿';
+  const label = gnats === 0 ? 'Low gnat activity' : 'Gnat Forecast';
+  el.className = `gnat-banner gnat-${lvl}`;
+  el.innerHTML = gnats > 0
+    ? `<span class="gnat-num">${gnats}<span class="gnat-denom">/10</span></span><span class="gnat-icons">${icons}</span><span class="gnat-label">${label}</span><span class="gnat-temp">${Math.round(tempF)}°F</span>`
+    : `<span class="gnat-icons">${icons}</span><span class="gnat-label">${label}</span><span class="gnat-temp">${Math.round(tempF)}°F</span>`;
+  el.style.display = '';
+}
 
 // ── API ───────────────────────────────────────────────────
 function getToken() { return localStorage.getItem('authToken'); }
@@ -1165,6 +1223,7 @@ function renderGroup(day, g, gi, container) {
       <span class="tee-group-time-display" id="gtd-${g.id}">${g.time ? formatTime(g.time) : 'No time set'}</span>
       <span class="tee-group-players-count" id="gpc-${g.id}" style="${pCount>=4?'color:#f0c520':''}">${pCount}/4 players</span>
       <button class="btn-remove-group admin-only" style="display:${isAdmin()?'':'none'}" onclick="removeGroup('${day}','${g.id}')">✕ Remove</button>
+      <div class="gnat-banner" id="gnat-${g.id}" style="display:none"></div>
     </div>
     <div class="tee-group-body">
       <div class="tee-group-fields">
@@ -1188,6 +1247,7 @@ function renderGroup(day, g, gi, container) {
     </div>`;
   container.appendChild(div);
   renderGroupChips(day, g);
+  fetchAndShowGnat(day, g);
 
   document.getElementById('gt-'+g.id).addEventListener('change', () => {
     const inp = document.getElementById('gt-'+g.id);
@@ -1234,6 +1294,7 @@ function teeConfirmSave() {
   if (d) d.textContent = formatTime(time);
   updateCardBadge(day); updateStats();
   saveTeeTime(g, day).then(() => showToast(`⛳ Tee time set to ${formatTime(time)}`));
+  fetchAndShowGnat(day, g);
 }
 
 // ── Players ───────────────────────────────────────────────
