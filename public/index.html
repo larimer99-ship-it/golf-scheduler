@@ -697,6 +697,7 @@ function uid() { return 'u' + Date.now() + '_' + (++_uidN); }
 const GNAT_LAT = 35.9382, GNAT_LON = -77.7905;
 const forecastCache = {}; // key 'YYYY-MM-DD-H' → { tempF, weatherCode, windMph, humidity }
 const dailyHighCache = {}; // key 'YYYY-MM-DD' → daily high tempF
+const dailyForecastCache = {}; // key 'YYYY-MM-DD' → { highF, weatherCode, maxWindMph }
 let _gnatFetch = null;
 
 async function ensureGnatData() {
@@ -704,6 +705,7 @@ async function ensureGnatData() {
   _gnatFetch = fetch(
     `https://api.open-meteo.com/v1/forecast?latitude=${GNAT_LAT}&longitude=${GNAT_LON}` +
     `&hourly=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m` +
+    `&daily=temperature_2m_max,weather_code,wind_speed_10m_max` +
     `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=16`
   ).then(r => r.ok ? r.json() : Promise.reject(r.status))
    .then(data => {
@@ -716,6 +718,14 @@ async function ensureGnatData() {
          humidity: data.hourly.relative_humidity_2m[i],
        };
        if (dailyHighCache[d] === undefined || tempF > dailyHighCache[d]) dailyHighCache[d] = tempF;
+     });
+     data.daily.time.forEach((d, i) => {
+       dailyForecastCache[d] = {
+         highF:       data.daily.temperature_2m_max[i],
+         weatherCode: data.daily.weather_code[i],
+         maxWindMph:  data.daily.wind_speed_10m_max[i],
+       };
+       dailyHighCache[d] = data.daily.temperature_2m_max[i];
      });
    })
    .catch(e => { console.error('forecast fetch:', e); _gnatFetch = null; });
@@ -752,14 +762,14 @@ async function fetchAndShowGnat(day, g) {
   const fc = forecastCache[key];
   if (!fc) { wrapEl.style.display = 'none'; return; }
 
-  // Weather row
-  const cond = wmoToCondition(fc.weatherCode);
+  // Weather row — daily high forecast
+  const daily = dailyForecastCache[day] || { highF: fc.tempF, weatherCode: fc.weatherCode, maxWindMph: fc.windMph };
+  const cond = wmoToCondition(daily.weatherCode);
   wxEl.innerHTML =
     `<span class="tee-wx-icon">${cond.icon}</span>` +
-    `<span class="tee-wx-temp">${Math.round(fc.tempF)}°F</span>` +
+    `<span class="tee-wx-temp">High: ${Math.round(daily.highF)}°F</span>` +
     `<span class="tee-wx-condition">${cond.label}</span>` +
-    `<span class="tee-wx-detail">· ${Math.round(fc.windMph)} mph</span>` +
-    `<span class="tee-wx-detail">· ${fc.humidity}% humidity</span>`;
+    `<span class="tee-wx-detail">· Winds to ${Math.round(daily.maxWindMph)} mph</span>`;
 
   // Gnat row — based on forecasted daily high
   const gnats = gnatsFromTemp(dailyHighCache[day] ?? fc.tempF);
