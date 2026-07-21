@@ -509,6 +509,11 @@
   .gnat-level-low .gnat-num { color:#52b788; }
   .gnat-level-med .gnat-num { color:var(--sand); }
   .gnat-level-high .gnat-num { color:#e07070; }
+  .day-gnat-badge { font-family:'Courier Prime',monospace; font-size:clamp(0.58rem,1.3vw,0.64rem); font-weight:700; letter-spacing:0.05em; margin-top:3px; }
+  .gnat-day-none { color:var(--light-green); opacity:0.7; }
+  .gnat-day-low  { color:#52b788; }
+  .gnat-day-med  { color:var(--sand); }
+  .gnat-day-high { color:#e07070; }
 </style>
 </head>
 <body>
@@ -727,6 +732,33 @@ async function fetchAndShowGnat(day, g) {
     ? `<span class="gnat-num">${gnats}<span class="gnat-denom">/10</span></span><span class="gnat-icons">${icons}</span><span class="gnat-label">${label}</span><span class="gnat-temp">${Math.round(tempF)}°F</span>`
     : `<span class="gnat-icons">${icons}</span><span class="gnat-label">${label}</span><span class="gnat-temp">${Math.round(tempF)}°F</span>`;
   el.style.display = '';
+  updateDayGnatBanner(day);
+}
+
+function updateDayGnatBanner(dateStr) {
+  const el = document.getElementById('gnat-day-' + dateStr);
+  if (!el) return;
+  const groups = (state[dateStr] && state[dateStr].groups || []).filter(g => g.time);
+  if (!groups.length) { el.style.display = 'none'; return; }
+  let maxGnats = -1, repTemp = null;
+  groups.forEach(g => {
+    const hour = parseInt(g.time.split(':')[0]);
+    const tempF = gnatCache[`${dateStr}-${hour}`];
+    if (tempF !== undefined) {
+      const gnats = gnatsFromTemp(tempF);
+      if (gnats > maxGnats) { maxGnats = gnats; repTemp = tempF; }
+    }
+  });
+  if (maxGnats === -1) { el.style.display = 'none'; return; }
+  if (maxGnats === 0) {
+    el.className = 'day-gnat-badge gnat-day-none';
+    el.textContent = '🌿 Low gnats';
+  } else {
+    const lvl = maxGnats <= 3 ? 'low' : maxGnats <= 6 ? 'med' : 'high';
+    el.className = `day-gnat-badge gnat-day-${lvl}`;
+    el.textContent = `🦟 ${maxGnats}/10`;
+  }
+  el.style.display = '';
 }
 
 // ── API ───────────────────────────────────────────────────
@@ -886,6 +918,7 @@ function openDateCard(dateStr, hideOthers=true) {
           <div class="day-name" style="display:flex;flex-direction:column;gap:2px">
             <span>${dayName}</span>
             <span class="day-date" style="font-size:.72rem;font-weight:400;opacity:.7">${dateLong}</span>
+            <span id="gnat-day-${dateStr}" class="day-gnat-badge" style="display:none"></span>
           </div>
           <div style="flex:1"></div>
           <span class="players-summary" id="psum-${dateStr}"></span>
@@ -1551,6 +1584,7 @@ function updateCardBadge(day) {
     card.classList.remove('has-tee-time');
     sumEl.innerHTML=''; psumEl.textContent='';
   }
+  updateDayGnatBanner(day);
   renderCalendar();
 }
 
