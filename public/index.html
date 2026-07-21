@@ -693,17 +693,31 @@ const API   = '/api';
 let _uidN = 0;
 function uid() { return 'u' + Date.now() + '_' + (++_uidN); }
 
-// ── Area Forecast + Gnat Index (Rocky Mount, NC) ─────────
-const GNAT_LAT = 35.9382, GNAT_LON = -77.7905;
+// ── Area Forecast + Gnat Index ────────────────────────────
+let forecastLat = 35.9382, forecastLon = -77.7905; // default: Rocky Mount, NC
 const forecastCache = {}; // key 'YYYY-MM-DD-H' → { tempF, weatherCode, windMph, humidity }
 const dailyHighCache = {}; // key 'YYYY-MM-DD' → daily high tempF
 const dailyForecastCache = {}; // key 'YYYY-MM-DD' → { highF, weatherCode, maxWindMph }
 let _gnatFetch = null;
 
+async function geocodeCourse(query) {
+  if (!query) return;
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
+    const data = await fetch(url, { headers: { 'Accept': 'application/json' } }).then(r => r.json());
+    if (!data.length) return;
+    const newLat = parseFloat(data[0].lat), newLon = parseFloat(data[0].lon);
+    if (newLat === forecastLat && newLon === forecastLon) return;
+    forecastLat = newLat; forecastLon = newLon;
+    _gnatFetch = null;
+    [forecastCache, dailyHighCache, dailyForecastCache].forEach(c => Object.keys(c).forEach(k => delete c[k]));
+  } catch(e) { console.error('geocode:', e); }
+}
+
 async function ensureGnatData() {
   if (_gnatFetch) return _gnatFetch;
   _gnatFetch = fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${GNAT_LAT}&longitude=${GNAT_LON}` +
+    `https://api.open-meteo.com/v1/forecast?latitude=${forecastLat}&longitude=${forecastLon}` +
     `&hourly=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m` +
     `&daily=temperature_2m_max,weather_code,wind_speed_10m_max` +
     `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=16`
@@ -1071,6 +1085,7 @@ async function loadAll() {
     if (courses.length) {
       currentCourseId = courses[0].id;
       document.getElementById('courseName').value = courses[0].name || '';
+      geocodeCourse(courses[0].address || courses[0].name);
       const tees = await apiFetch('GET', `/tees?course_id=${currentCourseId}`);
       teeState.tees = tees.map(t => ({
         id: String(t.id), apiId: t.id,
