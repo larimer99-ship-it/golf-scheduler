@@ -788,7 +788,7 @@ async function fetchAndShowGnat(day, g) {
   // Gnat row — based on forecasted daily high
   const gnats = gnatsFromTemp(dailyHighCache[day] ?? fc.tempF);
   const lvl   = gnats === 0 ? 'level-0' : gnats <= 3 ? 'level-low' : gnats <= 6 ? 'level-med' : 'level-high';
-  const icons = gnats > 0 ? '🦟'.repeat(Math.min(gnats, 5)) + (gnats > 5 ? `<span style="opacity:.7">+${gnats-5}</span>` : '') : '🌿';
+  const icons = gnats > 0 ? '🦟'.repeat(gnats) : '🌿';
   const label = gnats === 0 ? 'Low gnat activity' : 'Gnat Forecast';
   gnatEl.className = `gnat-banner gnat-${lvl}`;
   gnatEl.innerHTML = gnats > 0
