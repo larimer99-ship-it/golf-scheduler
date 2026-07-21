@@ -696,6 +696,7 @@ function uid() { return 'u' + Date.now() + '_' + (++_uidN); }
 // ── Area Forecast + Gnat Index (Rocky Mount, NC) ─────────
 const GNAT_LAT = 35.9382, GNAT_LON = -77.7905;
 const forecastCache = {}; // key 'YYYY-MM-DD-H' → { tempF, weatherCode, windMph, humidity }
+const dailyHighCache = {}; // key 'YYYY-MM-DD' → daily high tempF
 let _gnatFetch = null;
 
 async function ensureGnatData() {
@@ -708,12 +709,13 @@ async function ensureGnatData() {
    .then(data => {
      data.hourly.time.forEach((t, i) => {
        const [d, hhmm] = t.split('T');
+       const tempF = data.hourly.temperature_2m[i];
        forecastCache[`${d}-${parseInt(hhmm)}`] = {
-         tempF:       data.hourly.temperature_2m[i],
-         weatherCode: data.hourly.weather_code[i],
-         windMph:     data.hourly.wind_speed_10m[i],
-         humidity:    data.hourly.relative_humidity_2m[i],
+         tempF, weatherCode: data.hourly.weather_code[i],
+         windMph: data.hourly.wind_speed_10m[i],
+         humidity: data.hourly.relative_humidity_2m[i],
        };
+       if (dailyHighCache[d] === undefined || tempF > dailyHighCache[d]) dailyHighCache[d] = tempF;
      });
    })
    .catch(e => { console.error('forecast fetch:', e); _gnatFetch = null; });
@@ -759,8 +761,8 @@ async function fetchAndShowGnat(day, g) {
     `<span class="tee-wx-detail">· ${Math.round(fc.windMph)} mph</span>` +
     `<span class="tee-wx-detail">· ${fc.humidity}% humidity</span>`;
 
-  // Gnat row
-  const gnats = gnatsFromTemp(fc.tempF);
+  // Gnat row — based on forecasted daily high
+  const gnats = gnatsFromTemp(dailyHighCache[day] ?? fc.tempF);
   const lvl   = gnats === 0 ? 'level-0' : gnats <= 3 ? 'level-low' : gnats <= 6 ? 'level-med' : 'level-high';
   const icons = gnats > 0 ? '🦟'.repeat(Math.min(gnats, 5)) + (gnats > 5 ? `<span style="opacity:.7">+${gnats-5}</span>` : '') : '🌿';
   const label = gnats === 0 ? 'Low gnat activity' : 'Gnat Forecast';
@@ -779,14 +781,16 @@ function updateDayGnatBanner(dateStr) {
   const groups = (state[dateStr] && state[dateStr].groups || []).filter(g => g.time);
   if (!groups.length) { el.style.display = 'none'; return; }
   let maxGnats = -1;
-  groups.forEach(g => {
-    const hour = parseInt(g.time.split(':')[0]);
-    const fc = forecastCache[`${dateStr}-${hour}`];
-    if (fc) {
-      const gnats = gnatsFromTemp(fc.tempF);
-      if (gnats > maxGnats) maxGnats = gnats;
-    }
-  });
+  const highTemp = dailyHighCache[dateStr];
+  if (highTemp !== undefined) {
+    maxGnats = gnatsFromTemp(highTemp);
+  } else {
+    groups.forEach(g => {
+      const hour = parseInt(g.time.split(':')[0]);
+      const fc = forecastCache[`${dateStr}-${hour}`];
+      if (fc) { const gnats = gnatsFromTemp(fc.tempF); if (gnats > maxGnats) maxGnats = gnats; }
+    });
+  }
   if (maxGnats === -1) { el.style.display = 'none'; return; }
   if (maxGnats === 0) {
     el.className = 'day-gnat-badge gnat-day-none';
