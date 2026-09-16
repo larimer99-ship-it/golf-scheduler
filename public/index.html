@@ -1485,6 +1485,8 @@ async function addPlayer(day, gid, nameOverride) {
   const allOnDate = (state[day]&&state[day].groups||[]).flatMap(gr=>gr.players||[]);
   if (allOnDate.some(p=>p.name===name)) { showToast(`${name} is already scheduled on this date.`); return; }
 
+  if (nameOverride && !confirm(`Add ${name} to this tee time?`)) return;
+
   let rosterEntry = playerRoster.find(p=>p.name===name);
   const playerObj = { name, transport:'walk', handicap: rosterEntry?(rosterEntry.handicap||''):'', selectedTee:null, apiId: rosterEntry?rosterEntry.apiId:null };
 
