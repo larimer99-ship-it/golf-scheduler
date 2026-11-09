@@ -505,6 +505,7 @@
   .tee-wx-temp { font-family:'Playfair Display',serif; font-weight:900; font-size:clamp(1.1rem,2.8vw,1.35rem); color:var(--cream); letter-spacing:-0.01em; }
   .tee-wx-condition { color:var(--light-green); opacity:0.85; }
   .tee-wx-detail { color:var(--light-green); opacity:0.6; }
+  .tee-wx-feels { flex-basis:100%; font-family:'Courier Prime',monospace; color:var(--sand); opacity:0.9; letter-spacing:0.04em; }
   .gnat-banner { display:flex; align-items:center; gap:8px; font-size:clamp(0.82rem,1.9vw,0.95rem); letter-spacing:0.04em; flex-wrap:wrap; }
   .gnat-label { text-transform:uppercase; letter-spacing:0.1em; color:#f4d35e; opacity:0.9; font-size:0.9em; }
   .gnat-num { font-family:'Playfair Display',serif; font-weight:700; font-size:clamp(1.1rem,2.8vw,1.35rem); }
@@ -730,7 +731,7 @@ function uid() { return 'u' + Date.now() + '_' + (++_uidN); }
 
 // ── Area Forecast + Gnat Index ────────────────────────────
 let forecastLat = 35.9382, forecastLon = -77.7905; // default: Rocky Mount, NC
-const forecastCache = {}; // key 'YYYY-MM-DD-H' → { tempF, weatherCode, windMph, humidity }
+const forecastCache = {}; // key 'YYYY-MM-DD-H' → { tempF, feelsF, weatherCode, windMph, humidity }
 const dailyHighCache = {}; // key 'YYYY-MM-DD' → daily high tempF
 const dailyForecastCache = {}; // key 'YYYY-MM-DD' → { highF, weatherCode, maxWindMph }
 let _gnatFetch = null;
@@ -746,23 +747,30 @@ async function geocodeCourse(query) {
     forecastLat = newLat; forecastLon = newLon;
     _gnatFetch = null;
     [forecastCache, dailyHighCache, dailyForecastCache].forEach(c => Object.keys(c).forEach(k => delete c[k]));
+    refreshAllForecasts();
   } catch(e) { console.error('geocode:', e); }
+}
+
+function refreshAllForecasts() {
+  Object.keys(state).forEach(day =>
+    (state[day].groups || []).forEach(g => { if (g.time) fetchAndShowGnat(day, g); }));
 }
 
 async function ensureGnatData() {
   if (_gnatFetch) return _gnatFetch;
   _gnatFetch = fetch(
     `https://api.open-meteo.com/v1/forecast?latitude=${forecastLat}&longitude=${forecastLon}` +
-    `&hourly=temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m` +
+    `&hourly=temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m` +
     `&daily=temperature_2m_max,weather_code,wind_speed_10m_max` +
-    `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York&forecast_days=16`
+    `&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=16`
   ).then(r => r.ok ? r.json() : Promise.reject(r.status))
    .then(data => {
      data.hourly.time.forEach((t, i) => {
        const [d, hhmm] = t.split('T');
        const tempF = data.hourly.temperature_2m[i];
        forecastCache[`${d}-${parseInt(hhmm)}`] = {
-         tempF, weatherCode: data.hourly.weather_code[i],
+         tempF, feelsF: data.hourly.apparent_temperature[i],
+         weatherCode: data.hourly.weather_code[i],
          windMph: data.hourly.wind_speed_10m[i],
          humidity: data.hourly.relative_humidity_2m[i],
        };
@@ -818,7 +826,10 @@ async function fetchAndShowGnat(day, g) {
     `<span class="tee-wx-icon">${cond.icon}</span>` +
     `<span class="tee-wx-temp">High: ${Math.round(daily.highF)}°F</span>` +
     `<span class="tee-wx-condition">${cond.label}</span>` +
-    `<span class="tee-wx-detail">· Winds to ${Math.round(daily.maxWindMph)} mph</span>`;
+    `<span class="tee-wx-detail">· Winds to ${Math.round(daily.maxWindMph)} mph</span>` +
+    (fc.feelsF != null
+      ? `<span class="tee-wx-feels">Feels like ${Math.round(fc.feelsF)}°F at tee time</span>`
+      : '');
 
   // Gnat row — based on forecasted daily high
   const gnats = gnatsFromTemp(dailyHighCache[day] ?? fc.tempF);
@@ -3513,6 +3524,7 @@ async function init() {
     } else {
       try { const c = await apiFetch('POST', '/courses', { name }); currentCourseId = c.id; } catch(e) { console.error('createCourse:', e); }
     }
+    geocodeCourse(name);
   }
   document.getElementById('courseName').addEventListener('blur',   saveCourseNameNow);
   document.getElementById('courseName').addEventListener('change', saveCourseNameNow);
