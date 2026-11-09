@@ -505,7 +505,9 @@
   .tee-wx-temp { font-family:'Playfair Display',serif; font-weight:900; font-size:clamp(1.1rem,2.8vw,1.35rem); color:var(--cream); letter-spacing:-0.01em; }
   .tee-wx-condition { color:var(--light-green); opacity:0.85; }
   .tee-wx-detail { color:var(--light-green); opacity:0.6; }
-  .tee-wx-feels { flex-basis:100%; font-family:'Courier Prime',monospace; color:var(--sand); opacity:0.9; letter-spacing:0.04em; }
+  .tee-wx-feels { flex-basis:100%; display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; font-family:'Courier Prime',monospace; color:var(--sand); letter-spacing:0.04em; }
+  .tee-wx-feels-lbl { text-transform:uppercase; font-size:0.85em; letter-spacing:0.1em; color:var(--light-green); opacity:0.75; }
+  .tee-wx-feels-pt b { color:var(--cream); font-weight:700; }
   .gnat-banner { display:flex; align-items:center; gap:8px; font-size:clamp(0.82rem,1.9vw,0.95rem); letter-spacing:0.04em; flex-wrap:wrap; }
   .gnat-label { text-transform:uppercase; letter-spacing:0.1em; color:#f4d35e; opacity:0.9; font-size:0.9em; }
   .gnat-num { font-family:'Playfair Display',serif; font-weight:700; font-size:clamp(1.1rem,2.8vw,1.35rem); }
@@ -807,6 +809,20 @@ function gnatsFromTemp(f) {
   return Math.min(10, Math.floor((f - 78) / 2));
 }
 
+// Feels-like at start, 2 hrs in, and finish (~4 hrs) of the round
+function feelsLikeRoundHtml(day, startHour) {
+  const points = [['Start', 0], ['2 hrs', 2], ['Finish', 4]].map(([label, offset]) => {
+    const d = new Date(day + 'T00:00:00');
+    d.setHours(startHour + offset);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}-${d.getHours()}`;
+    const f = forecastCache[key] && forecastCache[key].feelsF;
+    return f != null ? `<span class="tee-wx-feels-pt">${label} <b>${Math.round(f)}°</b></span>` : '';
+  }).filter(Boolean);
+  return points.length
+    ? `<span class="tee-wx-feels"><span class="tee-wx-feels-lbl">Feels like</span>${points.join('')}</span>`
+    : '';
+}
+
 async function fetchAndShowGnat(day, g) {
   if (!g.time) return;
   const wrapEl = document.getElementById('forecast-wrap-' + g.id);
@@ -827,9 +843,7 @@ async function fetchAndShowGnat(day, g) {
     `<span class="tee-wx-temp">High: ${Math.round(daily.highF)}°F</span>` +
     `<span class="tee-wx-condition">${cond.label}</span>` +
     `<span class="tee-wx-detail">· Winds to ${Math.round(daily.maxWindMph)} mph</span>` +
-    (fc.feelsF != null
-      ? `<span class="tee-wx-feels">Feels like ${Math.round(fc.feelsF)}°F at tee time</span>`
-      : '');
+    feelsLikeRoundHtml(day, hour);
 
   // Gnat row — based on forecasted daily high
   const gnats = gnatsFromTemp(dailyHighCache[day] ?? fc.tempF);
